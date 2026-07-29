@@ -1,8 +1,11 @@
-import { Dex, toID } from 'pokemon-showdown';
+import { createRequire } from 'node:module';
+import type * as PokemonShowdown from 'pokemon-showdown';
 
 import { InputError } from '../core/errors.js';
 import type { MoveSummary, SpeciesSummary } from '../core/types.js';
 
+const require = createRequire(import.meta.url);
+const { Dex, toID } = require('pokemon-showdown') as typeof PokemonShowdown;
 const championsDex = Dex.mod('champions');
 
 function normalizeAccuracy(value: number | true): number | true {
