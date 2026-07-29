@@ -1,0 +1,25 @@
+{
+  "name": "champions-ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pokémon Champions battle decision AI starter with a web UI",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.server.json && tsc -p tsconfig.client.json && node scripts/copy-static.mjs",
+    "dev": "npm run build && node --watch dist/server/server/index.js",
+    "start": "node dist/server/server/index.js",
+    "typecheck": "tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.client.json --noEmit",
+    "test": "npm run build && node --test dist/server/core/heuristic.test.js",
+    "check": "npm run typecheck && npm run test"
+  },
+  "dependencies": {
+    "pokemon-showdown": "0.11.11"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "^5.8.3"
+  }
+}
