@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Pokémon Championsの対戦状況をShowdown形式のイベントとして追跡するWeb UI">
+    <title>Champions AI Live Tracker</title>
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/live.css">
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="hero live-hero">
+        <div>
+          <p class="eyebrow">LIVE BATTLE STATE</p>
+          <h1>Live Tracker</h1>
+          <p>
+            ポケチャン画面から確認した変化を手動入力し、Showdownプロトコルと同じ
+            BattleEventへ変換します。将来の画面認識も同じイベントAPIへ接続します。
+          </p>
+        </div>
+        <div class="live-header-actions">
+          <a class="status-pill nav-pill" href="/">詳細入力へ戻る</a>
+          <div id="live-status" class="status-pill">接続確認中…</div>
+        </div>
+      </header>
+
+      <section class="live-layout">
+        <div class="live-controls">
+          <section class="panel live-panel">
+            <div class="section-heading">
+              <h2>ターン</h2>
+              <p>ターン進行もイベントとして記録します。</p>
+            </div>
+            <div class="inline-controls">
+              <input id="turn-number" type="number" min="0" value="1" aria-label="ターン数">
+              <button id="set-turn" type="button">設定</button>
+              <button id="next-turn" class="secondary-button" type="button">+1</button>
+            </div>
+          </section>
+
+          <section class="panel live-panel">
+            <div class="section-heading">
+              <h2>ポケモンイベント</h2>
+              <p>交代、HP、状態異常、能力変化、使用技を登録します。</p>
+            </div>
+            <form id="pokemon-event-form" class="control-grid">
+              <label>対象
+                <select name="slot">
+                  <option value="p1a">自分 左 p1a</option>
+                  <option value="p1b">自分 右 p1b</option>
+                  <option value="p2a">相手 左 p2a</option>
+                  <option value="p2b">相手 右 p2b</option>
+                </select>
+              </label>
+              <label>イベント
+                <select name="eventType">
+                  <option value="switch">場に出た</option>
+                  <option value="hp">HP更新</option>
+                  <option value="status">状態異常</option>
+                  <option value="boost">能力ランク変化</option>
+                  <option value="move">技を使用</option>
+                  <option value="faint">ひんし</option>
+                </select>
+              </label>
+              <label class="wide-control">値
+                <input name="value" value="ガブリアス" placeholder="ポケモン名、技名、状態異常">
+              </label>
+              <label>現在HP
+                <input name="currentHp" type="number" min="0" value="183">
+              </label>
+              <label>最大HP
+                <input name="maxHp" type="number" min="1" value="183">
+              </label>
+              <label>HP %
+                <input name="hpPercent" type="number" min="0" max="100" step="0.1" value="100">
+              </label>
+              <label>能力
+                <select name="stat">
+                  <option value="atk">攻撃</option>
+                  <option value="def">防御</option>
+                  <option value="spa">特攻</option>
+                  <option value="spd">特防</option>
+                  <option value="spe">素早さ</option>
+                  <option value="accuracy">命中</option>
+                  <option value="evasion">回避</option>
+                </select>
+              </label>
+              <label>変化量
+                <input name="amount" type="number" min="-6" max="6" value="1">
+              </label>
+              <label>ランク操作
+                <select name="boostMode">
+                  <option value="add">加算</option>
+                  <option value="set">指定値へ設定</option>
+                </select>
+              </label>
+              <label class="check-control wide-control">
+                <input name="exactHp" type="checkbox" checked>
+                HPを実数値として記録
+              </label>
+              <button class="wide-control" type="submit">イベントを反映</button>
+            </form>
+          </section>
+
+          <section class="panel live-panel">
+            <div class="section-heading">
+              <h2>場・サイド・一時状態</h2>
+              <p>天候、フィールド、壁、おいかぜ、トリックルームなどを開始・終了します。</p>
+            </div>
+            <form id="condition-form" class="control-grid">
+              <label>範囲
+                <select name="scope">
+                  <option value="weather">天候</option>
+                  <option value="terrain">フィールド</option>
+                  <option value="field">場全体</option>
+                  <option value="p1">自分側</option>
+                  <option value="p2">相手側</option>
+                  <option value="p1a">自分 左</option>
+                  <option value="p1b">自分 右</option>
+                  <option value="p2a">相手 左</option>
+                  <option value="p2b">相手 右</option>
+                </select>
+              </label>
+              <label>操作
+                <select name="action">
+                  <option value="start">開始</option>
+                  <option value="end">終了</option>
+                </select>
+              </label>
+              <label class="wide-control">状態名
+                <input name="condition" value="おいかぜ" placeholder="例: おいかぜ、RainDance、Trick Room">
+              </label>
+              <button class="wide-control" type="submit">状態を反映</button>
+            </form>
+          </section>
+
+          <section class="panel live-panel">
+            <div class="section-heading">
+              <h2>Showdownログ取込</h2>
+              <p>同じ状態ストアへShowdownプロトコルを直接投入できます。</p>
+            </div>
+            <form id="protocol-form">
+              <textarea id="protocol-text" rows="8" spellcheck="false">|turn|1
+|switch|p1a: Garchomp|Garchomp, L50, M|183/183
+|switch|p2a: Incineroar|Incineroar, L50, M|100/100
+|-sidestart|p1: player|move: Tailwind</textarea>
+              <button type="submit">ログを解析して反映</button>
+            </form>
+          </section>
+
+          <section class="panel live-panel vision-panel">
+            <div class="section-heading">
+              <h2>画面認識</h2>
+              <p>未実装。認識器はBattleEvent配列を`/api/state/events`へ送ります。</p>
+            </div>
+            <code>{ "events": [{ "type": "weather", "condition": "rain", "source": "vision", "confidence": 0.96 }] }</code>
+          </section>
+        </div>
+
+        <aside class="panel live-panel state-panel">
+          <div class="state-heading">
+            <div>
+              <h2>現在のBattleState</h2>
+              <p id="state-meta">読み込み中…</p>
+            </div>
+            <button id="reset-state" class="danger-button" type="button">リセット</button>
+          </div>
+          <div id="state-view" class="empty-state">状態を読み込んでいます。</div>
+        </aside>
+      </section>
+    </main>
+    <script type="module" src="/live.js"></script>
+  </body>
+</html>
