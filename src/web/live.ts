@@ -1,3 +1,5 @@
+export {};
+
 type SideId = 'p1' | 'p2';
 type ActiveSlot = 'p1a' | 'p1b' | 'p2a' | 'p2b';
 type BoostStat = 'atk' | 'def' | 'spa' | 'spd' | 'spe' | 'accuracy' | 'evasion';
