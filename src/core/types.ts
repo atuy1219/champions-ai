@@ -73,19 +73,22 @@ export interface AnalyzeResponse {
   warnings: string[];
 }
 
+export interface BaseStats {
+  hp: number;
+  atk: number;
+  def: number;
+  spa: number;
+  spd: number;
+  spe: number;
+}
+
 export interface SpeciesSummary {
   id: string;
   name: string;
   displayName: string;
   types: string[];
-  baseStats: {
-    hp: number;
-    atk: number;
-    def: number;
-    spa: number;
-    spd: number;
-    spe: number;
-  };
+  baseStats: BaseStats;
+  nfe?: boolean;
 }
 
 export interface MoveSummary {
@@ -102,6 +105,20 @@ export interface MoveSummary {
   selfBoost?: {
     boosts?: Partial<Record<StatKey, number>>;
   };
+  status?: string;
+  volatileStatus?: string;
+  sideCondition?: string;
+  weather?: string;
+  terrain?: string;
+  pseudoWeather?: string;
+  selfSwitch?: string | boolean;
+  forceSwitch?: boolean;
+  drain?: [number, number];
+  recoil?: [number, number];
+  minHits?: number;
+  maxHits?: number;
+  fixedDamage?: number | 'level';
+  critRatio?: number;
 }
 
 export interface LocalizedSearchResult {
