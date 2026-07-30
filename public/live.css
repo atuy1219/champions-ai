@@ -1,0 +1,216 @@
+textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid rgba(159, 177, 226, 0.18);
+  border-radius: 12px;
+  outline: none;
+  background: rgba(6, 10, 22, 0.78);
+  color: #f5f7ff;
+  padding: 12px;
+  font: 0.82rem/1.55 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.live-header-actions {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.nav-pill {
+  text-decoration: none;
+}
+
+.live-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(370px, 0.72fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.live-controls {
+  display: grid;
+  gap: 16px;
+}
+
+.live-panel {
+  padding: 22px;
+}
+
+.state-panel {
+  position: sticky;
+  top: 20px;
+}
+
+.inline-controls {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.inline-controls button,
+.control-grid button,
+.state-heading button {
+  width: auto;
+  margin-top: 0;
+}
+
+.secondary-button {
+  background: rgba(117, 149, 255, 0.14);
+  color: #a9bbff;
+  box-shadow: none;
+}
+
+.danger-button {
+  background: rgba(255, 98, 98, 0.15);
+  color: #ffadad;
+  box-shadow: none;
+}
+
+.control-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.wide-control {
+  grid-column: 1 / -1;
+}
+
+.state-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.state-heading h2,
+.state-heading p {
+  margin: 0;
+}
+
+.state-heading p {
+  margin-top: 5px;
+  color: #7f8aa6;
+  font-size: 0.8rem;
+}
+
+.state-summary {
+  display: grid;
+  gap: 14px;
+}
+
+.field-summary,
+.pokemon-state,
+.history-row {
+  border: 1px solid rgba(159, 177, 226, 0.14);
+  border-radius: 15px;
+  background: rgba(7, 11, 24, 0.52);
+  padding: 14px;
+}
+
+.field-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.field-summary span,
+.pokemon-state small {
+  color: #7e8aa8;
+  font-size: 0.76rem;
+}
+
+.active-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.pokemon-state h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
+.pokemon-state dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 5px 10px;
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.pokemon-state dt {
+  color: #78839f;
+}
+
+.pokemon-state dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.condition-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.condition-tag {
+  border-radius: 999px;
+  background: rgba(117, 149, 255, 0.12);
+  color: #a9bbff;
+  padding: 4px 8px;
+  font-size: 0.72rem;
+}
+
+.history-list {
+  display: grid;
+  gap: 7px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.history-row {
+  padding: 9px 11px;
+  font: 0.74rem/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: #aeb9d5;
+}
+
+.vision-panel code {
+  display: block;
+  overflow-x: auto;
+  border-radius: 12px;
+  background: rgba(6, 10, 22, 0.78);
+  color: #9fb2ff;
+  padding: 12px;
+  font-size: 0.75rem;
+}
+
+@media (max-width: 1050px) {
+  .live-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .state-panel {
+    position: static;
+  }
+}
+
+@media (max-width: 680px) {
+  .control-grid,
+  .field-summary,
+  .active-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wide-control {
+    grid-column: auto;
+  }
+
+  .live-header-actions {
+    justify-items: start;
+  }
+}
