@@ -3,18 +3,25 @@ import { stat } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
 
+import {
+  assertBattleEvent,
+  BattleStateStore,
+  type BattleEvent,
+} from '../core/battle-state.js';
 import { HeuristicAnalyzer } from '../core/heuristic.js';
 import { InputError } from '../core/errors.js';
 import type { AnalyzeRequest } from '../core/types.js';
+import { parseShowdownProtocol } from '../input/showdown-protocol.js';
 import { ShowdownAdapter } from '../showdown/adapter.js';
 
 const PORT = Number.parseInt(process.env.PORT ?? '3000', 10);
 const HOST = process.env.HOST ?? '127.0.0.1';
 const PUBLIC_ROOT = resolve(process.cwd(), 'dist/public');
-const MAX_BODY_BYTES = 64 * 1024;
+const MAX_BODY_BYTES = 256 * 1024;
 
 const showdown = new ShowdownAdapter();
 const analyzer = new HeuristicAnalyzer(showdown);
+const battleState = new BattleStateStore();
 
 const contentTypes: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
@@ -59,6 +66,16 @@ async function readJsonBody<T>(request: IncomingMessage): Promise<T> {
   }
 }
 
+function validateEvents(value: unknown): BattleEvent[] {
+  if (!Array.isArray(value)) throw new InputError('eventsは配列で指定してください。');
+  try {
+    for (const event of value) assertBattleEvent(event);
+  } catch (error) {
+    throw new InputError(error instanceof Error ? error.message : 'イベント形式が正しくありません。');
+  }
+  return value;
+}
+
 async function serveStatic(
   pathname: string,
   response: ServerResponse,
@@ -77,7 +94,7 @@ async function serveStatic(
 
     response.writeHead(200, {
       'Content-Type': contentTypes[extname(filePath)] ?? 'application/octet-stream',
-      'Cache-Control': filePath.endsWith('index.html')
+      'Cache-Control': filePath.endsWith('index.html') || filePath.endsWith('live.html')
         ? 'no-cache'
         : 'public, max-age=300',
     });
@@ -122,6 +139,33 @@ const server = createServer(async (request, response) => {
     if (method === 'POST' && url.pathname === '/api/analyze') {
       const body = await readJsonBody<AnalyzeRequest>(request);
       sendJson(response, 200, analyzer.analyze(body));
+      return;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/state') {
+      sendJson(response, 200, battleState.snapshot());
+      return;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/state/events') {
+      const body = await readJsonBody<{ events?: unknown }>(request);
+      sendJson(response, 200, battleState.applyMany(validateEvents(body.events)));
+      return;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/state/showdown') {
+      const body = await readJsonBody<{ text?: unknown }>(request);
+      if (typeof body.text !== 'string') throw new InputError('textを文字列で指定してください。');
+      const events = parseShowdownProtocol(body.text);
+      sendJson(response, 200, {
+        parsedEvents: events.length,
+        state: battleState.applyMany(events),
+      });
+      return;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/state/reset') {
+      sendJson(response, 200, battleState.reset());
       return;
     }
 
