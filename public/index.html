@@ -17,18 +17,18 @@
           <p class="eyebrow">EARLY MVP</p>
           <h1>Champions AI</h1>
           <p>
-            Pokémon ShowdownのChampions modを使い、入力した4技を
-            タイプ相性・一致補正・天候・補助性能から順位付けします。
+            日本語のポケモン名・技名をShowdown内部IDへ変換し、HP、能力ランク、
+            天候・フィールド・壁・行動順を含めて候補手を近似評価します。
           </p>
         </div>
         <div id="status-text" class="status-pill">接続確認中…</div>
       </header>
 
-      <section class="workspace">
-        <form id="analyze-form" class="panel form-panel">
+      <form id="analyze-form" class="workspace">
+        <section class="panel form-panel">
           <div class="section-heading">
             <h2>盤面入力</h2>
-            <p>現段階では1対1の簡易評価です。</p>
+            <p>現段階では1対1の簡易評価です。日本語・英語の両方で入力できます。</p>
           </div>
 
           <label>
@@ -41,76 +41,169 @@
             >
           </label>
 
-          <div class="two-column">
-            <fieldset>
+          <div class="two-column pokemon-columns">
+            <fieldset class="pokemon-card">
               <legend>自分</legend>
               <label>
                 ポケモン
-                <input name="attackerSpecies" value="Garchomp" required>
+                <input
+                  name="attackerSpecies"
+                  value="ガブリアス"
+                  autocomplete="off"
+                  data-autocomplete="species"
+                  required
+                >
               </label>
               <label>
-                HP %
-                <input name="attackerHp" type="number" min="0" max="100" value="100" required>
+                状態異常
+                <select name="attackerStatus">
+                  <option value="none">なし</option>
+                  <option value="burn">やけど</option>
+                  <option value="poison">どく</option>
+                  <option value="toxic">もうどく</option>
+                  <option value="paralysis">まひ</option>
+                  <option value="sleep">ねむり</option>
+                  <option value="freeze">こおり</option>
+                </select>
               </label>
-              <label>
-                素早さランク
-                <input name="attackerSpeedStage" type="number" min="-6" max="6" value="0" required>
-              </label>
+
+              <div class="hp-editor">
+                <span class="field-label">HP</span>
+                <div class="hp-grid">
+                  <label>
+                    現在値
+                    <input name="attackerCurrentHp" type="number" min="0" value="183" required>
+                  </label>
+                  <label>
+                    最大値
+                    <input name="attackerMaxHp" type="number" min="1" value="183" required>
+                  </label>
+                  <output id="attacker-hp-percent" class="hp-percent">100.0%</output>
+                </div>
+              </div>
+
+              <fieldset class="nested-fieldset">
+                <legend>技</legend>
+                <div class="move-grid">
+                  <input name="move1" value="じしん" data-autocomplete="moves" autocomplete="off" required>
+                  <input name="move2" value="ドラゴンクロー" data-autocomplete="moves" autocomplete="off">
+                  <input name="move3" value="まもる" data-autocomplete="moves" autocomplete="off">
+                  <input name="move4" value="つるぎのまい" data-autocomplete="moves" autocomplete="off">
+                </div>
+              </fieldset>
+
+              <details>
+                <summary>能力ランク</summary>
+                <div class="stage-grid" data-stage-owner="attacker">
+                  <label>攻撃<select name="attacker-atk" data-stage></select></label>
+                  <label>防御<select name="attacker-def" data-stage></select></label>
+                  <label>特攻<select name="attacker-spa" data-stage></select></label>
+                  <label>特防<select name="attacker-spd" data-stage></select></label>
+                  <label>素早さ<select name="attacker-spe" data-stage></select></label>
+                  <label>命中<select name="attacker-accuracy" data-stage></select></label>
+                  <label>回避<select name="attacker-evasion" data-stage></select></label>
+                </div>
+              </details>
             </fieldset>
 
-            <fieldset>
+            <fieldset class="pokemon-card">
               <legend>相手</legend>
               <label>
                 ポケモン
-                <input name="defenderSpecies" value="Incineroar" required>
+                <input
+                  name="defenderSpecies"
+                  value="ガオガエン"
+                  autocomplete="off"
+                  data-autocomplete="species"
+                  required
+                >
+              </label>
+              <label>
+                状態異常
+                <select name="defenderStatus">
+                  <option value="none">なし</option>
+                  <option value="burn">やけど</option>
+                  <option value="poison">どく</option>
+                  <option value="toxic">もうどく</option>
+                  <option value="paralysis">まひ</option>
+                  <option value="sleep">ねむり</option>
+                  <option value="freeze">こおり</option>
+                </select>
               </label>
               <label>
                 HP %
-                <input name="defenderHp" type="number" min="0" max="100" value="100" required>
+                <input name="defenderHp" type="number" min="0" max="100" step="0.1" value="100" required>
               </label>
-              <label>
-                素早さランク
-                <input name="defenderSpeedStage" type="number" min="-6" max="6" value="0" required>
-              </label>
+
+              <details>
+                <summary>能力ランク</summary>
+                <div class="stage-grid" data-stage-owner="defender">
+                  <label>攻撃<select name="defender-atk" data-stage></select></label>
+                  <label>防御<select name="defender-def" data-stage></select></label>
+                  <label>特攻<select name="defender-spa" data-stage></select></label>
+                  <label>特防<select name="defender-spd" data-stage></select></label>
+                  <label>素早さ<select name="defender-spe" data-stage></select></label>
+                  <label>命中<select name="defender-accuracy" data-stage></select></label>
+                  <label>回避<select name="defender-evasion" data-stage></select></label>
+                </div>
+              </details>
             </fieldset>
           </div>
 
-          <fieldset>
-            <legend>自分の技</legend>
-            <div class="move-grid">
-              <input name="move1" value="Earthquake" placeholder="技1" required>
-              <input name="move2" value="Dragon Claw" placeholder="技2">
-              <input name="move3" value="Protect" placeholder="技3">
-              <input name="move4" value="Swords Dance" placeholder="技4">
+          <fieldset class="field-panel">
+            <legend>場の状態</legend>
+            <div class="field-grid">
+              <label>
+                天候
+                <select name="weather">
+                  <option value="none">なし</option>
+                  <option value="sun">晴れ</option>
+                  <option value="rain">雨</option>
+                  <option value="sand">砂嵐</option>
+                  <option value="snow">雪</option>
+                </select>
+              </label>
+              <label>
+                フィールド
+                <select name="terrain">
+                  <option value="none">なし</option>
+                  <option value="electric">エレキ</option>
+                  <option value="grassy">グラス</option>
+                  <option value="misty">ミスト</option>
+                  <option value="psychic">サイコ</option>
+                </select>
+              </label>
+              <label class="check-control">
+                <input name="trickRoom" type="checkbox">
+                トリックルーム
+              </label>
+            </div>
+
+            <div class="side-condition-grid">
+              <fieldset class="nested-fieldset">
+                <legend>自分側</legend>
+                <div class="checkbox-grid">
+                  <label><input name="attackerTailwind" type="checkbox">おいかぜ</label>
+                  <label><input name="attackerReflect" type="checkbox">リフレクター</label>
+                  <label><input name="attackerLightScreen" type="checkbox">ひかりのかべ</label>
+                  <label><input name="attackerAuroraVeil" type="checkbox">オーロラベール</label>
+                </div>
+              </fieldset>
+              <fieldset class="nested-fieldset">
+                <legend>相手側</legend>
+                <div class="checkbox-grid">
+                  <label><input name="defenderTailwind" type="checkbox">おいかぜ</label>
+                  <label><input name="defenderReflect" type="checkbox">リフレクター</label>
+                  <label><input name="defenderLightScreen" type="checkbox">ひかりのかべ</label>
+                  <label><input name="defenderAuroraVeil" type="checkbox">オーロラベール</label>
+                </div>
+              </fieldset>
             </div>
           </fieldset>
 
-          <div class="two-column compact">
-            <label>
-              天候
-              <select name="weather">
-                <option value="none">なし</option>
-                <option value="sun">晴れ</option>
-                <option value="rain">雨</option>
-                <option value="sand">砂嵐</option>
-                <option value="snow">雪</option>
-              </select>
-            </label>
-
-            <label>
-              おいかぜ
-              <select name="tailwind">
-                <option value="none">なし</option>
-                <option value="attacker">自分側</option>
-                <option value="defender">相手側</option>
-                <option value="both">両方</option>
-              </select>
-            </label>
-          </div>
-
           <button id="submit-button" type="submit">候補手を評価</button>
           <p id="error-box" class="error-box" role="alert"></p>
-        </form>
+        </section>
 
         <section class="panel results-panel">
           <div class="section-heading">
@@ -121,7 +214,7 @@
             盤面を入力して「候補手を評価」を押してください。
           </div>
         </section>
-      </section>
+      </form>
     </main>
 
     <script type="module" src="/app.js"></script>
