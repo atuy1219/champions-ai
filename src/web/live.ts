@@ -1,201 +1,161 @@
-export {};
+import { renderEvaluation, renderState } from './live-render.js';
+import type {
+  ActiveSlot,
+  BattleState,
+  BattleStats,
+  CurrentEvaluationResponse,
+  SearchResult,
+  SideId,
+} from './live-types.js';
 
-type SideId = 'p1' | 'p2';
-type ActiveSlot = 'p1a' | 'p1b' | 'p2a' | 'p2b';
-type BoostStat = 'atk' | 'def' | 'spa' | 'spd' | 'spe' | 'accuracy' | 'evasion';
-
-interface HpState {
-  current: number | null;
-  max: number | null;
-  percent: number;
-  exact: boolean;
-}
-
-interface PokemonBattleState {
-  slot: ActiveSlot;
-  species: string;
-  hp: HpState;
-  status: string | null;
-  boosts: Record<BoostStat, number>;
-  volatiles: Record<string, { displayName: string }>;
-  revealedMoves: string[];
-  fainted: boolean;
-}
-
-interface BattleState {
-  revision: number;
-  turn: number;
-  weather: { displayName: string } | null;
-  terrain: { displayName: string } | null;
-  fieldConditions: Record<string, { displayName: string }>;
-  sides: Record<SideId, { conditions: Record<string, { displayName: string }> }>;
-  active: Partial<Record<ActiveSlot, PokemonBattleState>>;
-  history: Record<string, unknown>[];
-}
-
-function requiredElement<T extends Element>(selector: string): T {
+function required<T extends Element>(selector: string): T {
   const element = document.querySelector<T>(selector);
   if (!element) throw new Error(`Required element is missing: ${selector}`);
   return element;
 }
 
-const statusText = requiredElement<HTMLElement>('#live-status');
-const stateView = requiredElement<HTMLElement>('#state-view');
-const stateMeta = requiredElement<HTMLElement>('#state-meta');
-const pokemonForm = requiredElement<HTMLFormElement>('#pokemon-event-form');
-const conditionForm = requiredElement<HTMLFormElement>('#condition-form');
-const protocolForm = requiredElement<HTMLFormElement>('#protocol-form');
-const protocolText = requiredElement<HTMLTextAreaElement>('#protocol-text');
-const turnNumber = requiredElement<HTMLInputElement>('#turn-number');
+const statusText = required<HTMLElement>('#live-status');
+const stateView = required<HTMLElement>('#state-view');
+const stateMeta = required<HTMLElement>('#state-meta');
+const teamForm = required<HTMLFormElement>('#team-form');
+const pokemonForm = required<HTMLFormElement>('#pokemon-event-form');
+const conditionForm = required<HTMLFormElement>('#condition-form');
+const protocolForm = required<HTMLFormElement>('#protocol-form');
+const protocolText = required<HTMLTextAreaElement>('#protocol-text');
+const turnNumber = required<HTMLInputElement>('#turn-number');
+const evaluationView = required<HTMLElement>('#evaluation-view');
+const evaluationSide = required<HTMLSelectElement>('#evaluation-side');
+const evaluationFormat = required<HTMLInputElement>('#evaluation-format');
+const evaluateButton = required<HTMLButtonElement>('#evaluate-current');
 
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (character) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
-  }[character] ?? character));
-}
-
-function formValue(form: HTMLFormElement, name: string): string {
-  const control = form.elements.namedItem(name);
-  if (!(control instanceof HTMLInputElement || control instanceof HTMLSelectElement)) {
+function control(form: HTMLFormElement, name: string): HTMLInputElement | HTMLSelectElement {
+  const value = form.elements.namedItem(name);
+  if (!(value instanceof HTMLInputElement || value instanceof HTMLSelectElement)) {
     throw new Error(`${name}が見つかりません。`);
   }
-  return control.value;
+  return value;
 }
 
-function formChecked(form: HTMLFormElement, name: string): boolean {
-  const control = form.elements.namedItem(name);
-  if (!(control instanceof HTMLInputElement)) throw new Error(`${name}が見つかりません。`);
-  return control.checked;
+function value(form: HTMLFormElement, name: string): string {
+  return control(form, name).value;
 }
 
-async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+function checked(form: HTMLFormElement, name: string): boolean {
+  const input = form.elements.namedItem(name);
+  if (!(input instanceof HTMLInputElement)) throw new Error(`${name}が見つかりません。`);
+  return input.checked;
+}
+
+function optionalNumber(form: HTMLFormElement, name: string): number | null {
+  const text = value(form, name).trim();
+  if (!text) return null;
+  const number = Number(text);
+  return Number.isFinite(number) ? number : null;
+}
+
+async function json<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init);
-  const body = await response.json() as T | { error: string };
-  if (!response.ok) throw new Error('error' in (body as { error?: string }) ? (body as { error: string }).error : 'APIエラー');
+  const body = await response.json() as T | { error?: string };
+  if (!response.ok) throw new Error((body as { error?: string }).error ?? 'APIエラー');
   return body as T;
 }
 
-function hpText(hp: HpState): string {
-  if (hp.exact && hp.current !== null && hp.max !== null) {
-    return `${hp.current}/${hp.max} (${hp.percent.toFixed(1)}%)`;
-  }
-  return `${hp.percent.toFixed(1)}%`;
+async function postEvents(events: Record<string, unknown>[]): Promise<BattleState> {
+  const state = await json<BattleState>('/api/state/events', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ events }),
+  });
+  renderState(state, stateView, stateMeta, turnNumber);
+  statusText.textContent = 'イベント反映済み';
+  return state;
 }
 
-function conditionNames(conditions: Record<string, { displayName: string }>): string[] {
-  return Object.values(conditions).map((condition) => condition.displayName);
-}
-
-function tags(values: string[]): string {
-  if (values.length === 0) return '<span class="condition-tag">なし</span>';
-  return values.map((value) => `<span class="condition-tag">${escapeHtml(value)}</span>`).join('');
-}
-
-function pokemonCard(slot: ActiveSlot, pokemon?: PokemonBattleState): string {
-  if (!pokemon) {
-    return `<article class="pokemon-state"><h3>${slot}</h3><small>未登録</small></article>`;
-  }
-  const boosts = Object.entries(pokemon.boosts)
-    .filter(([, value]) => value !== 0)
-    .map(([stat, value]) => `${stat}${value > 0 ? '+' : ''}${value}`);
-  return `
-    <article class="pokemon-state">
-      <h3>${slot} · ${escapeHtml(pokemon.species)}</h3>
-      <dl>
-        <dt>HP</dt><dd>${escapeHtml(hpText(pokemon.hp))}</dd>
-        <dt>状態</dt><dd>${escapeHtml(pokemon.status ?? 'なし')}</dd>
-        <dt>ランク</dt><dd>${escapeHtml(boosts.join(', ') || '変化なし')}</dd>
-        <dt>確認済み技</dt><dd>${escapeHtml(pokemon.revealedMoves.join(', ') || 'なし')}</dd>
-      </dl>
-      <div class="condition-tags">${tags(conditionNames(pokemon.volatiles))}</div>
-    </article>`;
-}
-
-function renderState(state: BattleState): void {
-  stateMeta.textContent = `revision ${state.revision} / turn ${state.turn} / events ${state.history.length}`;
-  turnNumber.value = String(state.turn);
-  const fieldConditions = conditionNames(state.fieldConditions);
-  const p1Conditions = conditionNames(state.sides.p1.conditions);
-  const p2Conditions = conditionNames(state.sides.p2.conditions);
-  const recent = state.history.slice(-12).reverse();
-
-  stateView.className = 'state-summary';
-  stateView.innerHTML = `
-    <section class="field-summary">
-      <div><span>天候</span><strong>${escapeHtml(state.weather?.displayName ?? 'なし')}</strong></div>
-      <div><span>フィールド</span><strong>${escapeHtml(state.terrain?.displayName ?? 'なし')}</strong></div>
-      <div><span>場全体</span><div class="condition-tags">${tags(fieldConditions)}</div></div>
-      <div><span>自分側</span><div class="condition-tags">${tags(p1Conditions)}</div></div>
-      <div><span>相手側</span><div class="condition-tags">${tags(p2Conditions)}</div></div>
-    </section>
-    <section class="active-grid">
-      ${pokemonCard('p1a', state.active.p1a)}
-      ${pokemonCard('p1b', state.active.p1b)}
-      ${pokemonCard('p2a', state.active.p2a)}
-      ${pokemonCard('p2b', state.active.p2b)}
-    </section>
-    <section>
-      <div class="section-heading"><h2>最近のイベント</h2></div>
-      <div class="history-list">
-        ${recent.length ? recent.map((event) => `<div class="history-row">${escapeHtml(JSON.stringify(event))}</div>`).join('') : '<div class="history-row">イベントなし</div>'}
-      </div>
-    </section>`;
-}
-
-async function refreshState(silent = false): Promise<void> {
+async function refresh(silent = false): Promise<void> {
   try {
-    const state = await requestJson<BattleState>('/api/state');
-    renderState(state);
+    const state = await json<BattleState>('/api/state');
+    renderState(state, stateView, stateMeta, turnNumber);
     if (!silent) statusText.textContent = 'BattleState 接続済み';
   } catch (error) {
     if (!silent) statusText.textContent = error instanceof Error ? error.message : '接続失敗';
   }
 }
 
-async function postEvents(events: Record<string, unknown>[]): Promise<void> {
-  const state = await requestJson<BattleState>('/api/state/events', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ events }),
-  });
-  renderState(state);
-  statusText.textContent = 'イベント反映済み';
+function moves(text: string): string[] {
+  return text.split(/[、,]/).map((move) => move.trim()).filter(Boolean).slice(0, 4);
 }
+
+function stats(): BattleStats | null {
+  const entries = ['statHp', 'statAtk', 'statDef', 'statSpa', 'statSpd', 'statSpe']
+    .map((name) => optionalNumber(teamForm, name));
+  if (entries.every((entry) => entry === null)) return null;
+  if (entries.some((entry) => entry === null || entry <= 0)) {
+    throw new Error('実数値は6項目すべて入力するか、すべて空欄にしてください。');
+  }
+  return {
+    hp: entries[0]!, atk: entries[1]!, def: entries[2]!,
+    spa: entries[3]!, spd: entries[4]!, spe: entries[5]!,
+  };
+}
+
+function hpFrom(form: HTMLFormElement): Record<string, unknown> {
+  const exact = checked(form, 'exactHp');
+  const current = Number(value(form, 'currentHp'));
+  const max = Number(value(form, 'maxHp'));
+  const percent = exact && max > 0 ? current / max * 100 : Number(value(form, 'hpPercent'));
+  return { current: exact ? current : null, max: exact ? max : null, percent, exact };
+}
+
+teamForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  try {
+    const item = value(teamForm, 'item').trim();
+    const ability = value(teamForm, 'ability').trim();
+    const teraType = value(teamForm, 'teraType').trim();
+    await postEvents([{
+      type: 'teamMember',
+      side: value(teamForm, 'side') as SideId,
+      teamIndex: Number(value(teamForm, 'teamIndex')),
+      species: value(teamForm, 'species').trim(),
+      level: Number(value(teamForm, 'level')),
+      hp: hpFrom(teamForm),
+      moves: moves(value(teamForm, 'moves')),
+      item: item || null,
+      ability: ability || null,
+      teraType: teraType || null,
+      teraActive: checked(teamForm, 'teraActive'),
+      stats: stats(),
+      source: 'manual',
+    }]);
+  } catch (error) {
+    statusText.textContent = error instanceof Error ? error.message : 'チーム登録失敗';
+  }
+});
 
 pokemonForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   try {
-    const slot = formValue(pokemonForm, 'slot') as ActiveSlot;
-    const type = formValue(pokemonForm, 'eventType');
-    const value = formValue(pokemonForm, 'value').trim();
-    const current = Number(formValue(pokemonForm, 'currentHp'));
-    const max = Number(formValue(pokemonForm, 'maxHp'));
-    const percentInput = Number(formValue(pokemonForm, 'hpPercent'));
-    const exact = formChecked(pokemonForm, 'exactHp');
-    const percent = exact && max > 0 ? current / max * 100 : percentInput;
-    const hp = {
-      current: exact ? current : null,
-      max: exact ? max : null,
-      percent,
-      exact,
-    };
-
+    const slot = value(pokemonForm, 'slot') as ActiveSlot;
+    const type = value(pokemonForm, 'eventType');
+    const input = value(pokemonForm, 'value').trim();
     let battleEvent: Record<string, unknown>;
-    switch (type) {
-      case 'switch': battleEvent = { type, slot, species: value, hp, source: 'manual' }; break;
-      case 'hp': battleEvent = { type, slot, hp, source: 'manual' }; break;
-      case 'status': battleEvent = { type, slot, status: value === 'なし' || value === 'none' ? null : value, source: 'manual' }; break;
-      case 'boost': battleEvent = {
-        type,
-        slot,
-        stat: formValue(pokemonForm, 'stat'),
-        amount: Number(formValue(pokemonForm, 'amount')),
-        mode: formValue(pokemonForm, 'boostMode'),
-        source: 'manual',
-      }; break;
-      case 'move': battleEvent = { type, slot, move: value, source: 'manual' }; break;
-      case 'faint': battleEvent = { type, slot, source: 'manual' }; break;
-      default: throw new Error('未対応のイベントです。');
+    if (type === 'switch') {
+      battleEvent = { type, slot, species: input, teamIndex: Number(value(pokemonForm, 'teamIndex')), hp: hpFrom(pokemonForm), source: 'manual' };
+    } else if (type === 'hp') {
+      battleEvent = { type, slot, hp: hpFrom(pokemonForm), source: 'manual' };
+    } else if (type === 'status') {
+      battleEvent = { type, slot, status: input === 'なし' || input === 'none' ? null : input, source: 'manual' };
+    } else if (type === 'boost') {
+      battleEvent = {
+        type, slot, stat: value(pokemonForm, 'stat'), amount: Number(value(pokemonForm, 'amount')),
+        mode: value(pokemonForm, 'boostMode'), source: 'manual',
+      };
+    } else if (type === 'move') {
+      battleEvent = { type, slot, move: input, source: 'manual' };
+    } else if (type === 'faint') {
+      battleEvent = { type, slot, source: 'manual' };
+    } else {
+      throw new Error('未対応のイベントです。');
     }
     await postEvents([battleEvent]);
   } catch (error) {
@@ -206,18 +166,20 @@ pokemonForm.addEventListener('submit', async (event) => {
 conditionForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   try {
-    const scope = formValue(conditionForm, 'scope');
-    const action = formValue(conditionForm, 'action') as 'start' | 'end';
-    const condition = formValue(conditionForm, 'condition').trim();
+    const scope = value(conditionForm, 'scope');
+    const action = value(conditionForm, 'action') as 'start' | 'end';
+    const condition = value(conditionForm, 'condition').trim();
+    const duration = optionalNumber(conditionForm, 'duration');
+    const durationPatch = duration === null ? {} : { duration };
     let battleEvent: Record<string, unknown>;
     if (scope === 'weather' || scope === 'terrain') {
-      battleEvent = { type: scope, condition: action === 'start' ? condition : null, displayName: condition, source: 'manual' };
+      battleEvent = { type: scope, condition: action === 'start' ? condition : null, displayName: condition, ...durationPatch, source: 'manual' };
     } else if (scope === 'field') {
-      battleEvent = { type: 'fieldCondition', action, condition, displayName: condition, source: 'manual' };
+      battleEvent = { type: 'fieldCondition', action, condition, displayName: condition, ...durationPatch, source: 'manual' };
     } else if (scope === 'p1' || scope === 'p2') {
-      battleEvent = { type: 'sideCondition', action, side: scope, condition, displayName: condition, source: 'manual' };
+      battleEvent = { type: 'sideCondition', action, side: scope, condition, displayName: condition, ...durationPatch, source: 'manual' };
     } else {
-      battleEvent = { type: 'volatile', action, slot: scope, condition, displayName: condition, source: 'manual' };
+      battleEvent = { type: 'volatile', action, slot: scope, condition, displayName: condition, ...durationPatch, source: 'manual' };
     }
     await postEvents([battleEvent]);
   } catch (error) {
@@ -228,32 +190,81 @@ conditionForm.addEventListener('submit', async (event) => {
 protocolForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   try {
-    const body = await requestJson<{ state: BattleState; parsedEvents: number }>('/api/state/showdown', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: protocolText.value }),
+    const result = await json<{ state: BattleState; parsedEvents: number }>('/api/state/showdown', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: protocolText.value }),
     });
-    renderState(body.state);
-    statusText.textContent = `${body.parsedEvents}件のShowdownイベントを反映`;
+    renderState(result.state, stateView, stateMeta, turnNumber);
+    statusText.textContent = `${result.parsedEvents}件のShowdownイベントを反映`;
   } catch (error) {
     statusText.textContent = error instanceof Error ? error.message : '取込失敗';
   }
 });
 
-requiredElement<HTMLButtonElement>('#set-turn').addEventListener('click', () => {
+required<HTMLButtonElement>('#set-turn').addEventListener('click', () => {
   void postEvents([{ type: 'turn', turn: Number(turnNumber.value), source: 'manual' }]);
 });
 
-requiredElement<HTMLButtonElement>('#next-turn').addEventListener('click', async () => {
-  const state = await requestJson<BattleState>('/api/state');
+required<HTMLButtonElement>('#next-turn').addEventListener('click', async () => {
+  const state = await json<BattleState>('/api/state');
   await postEvents([{ type: 'turn', turn: state.turn + 1, source: 'manual' }]);
 });
 
-requiredElement<HTMLButtonElement>('#reset-state').addEventListener('click', async () => {
-  const state = await requestJson<BattleState>('/api/state/reset', { method: 'POST' });
-  renderState(state);
+required<HTMLButtonElement>('#reset-state').addEventListener('click', async () => {
+  const state = await json<BattleState>('/api/state/reset', { method: 'POST' });
+  renderState(state, stateView, stateMeta, turnNumber);
+  evaluationView.className = 'empty-state compact-empty';
+  evaluationView.textContent = 'まだ評価していません。';
   statusText.textContent = 'BattleStateをリセットしました';
 });
 
-void refreshState();
-window.setInterval(() => void refreshState(true), 1500);
+evaluateButton.addEventListener('click', async () => {
+  evaluateButton.disabled = true;
+  statusText.textContent = '現在盤面を評価中…';
+  try {
+    const result = await json<CurrentEvaluationResponse>('/api/evaluate-current', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ side: evaluationSide.value, formatId: evaluationFormat.value.trim() }),
+    });
+    renderEvaluation(result, evaluationView);
+    statusText.textContent = '現在盤面の評価完了';
+  } catch (error) {
+    evaluationView.className = 'empty-state compact-empty';
+    evaluationView.textContent = error instanceof Error ? error.message : '評価失敗';
+    statusText.textContent = '評価に失敗しました';
+  } finally {
+    evaluateButton.disabled = false;
+  }
+});
+
+function attachAutocomplete(input: HTMLInputElement): void {
+  const list = document.createElement('datalist');
+  list.id = 'live-species-suggestions';
+  document.body.append(list);
+  input.setAttribute('list', list.id);
+  let timer: number | undefined;
+  input.addEventListener('input', () => {
+    window.clearTimeout(timer);
+    const query = input.value.trim();
+    if (!query) return;
+    timer = window.setTimeout(async () => {
+      try {
+        const result = await json<{ results: SearchResult[] }>(`/api/search?kind=species&q=${encodeURIComponent(query)}`);
+        list.replaceChildren(...result.results.map((item) => {
+          const option = document.createElement('option');
+          option.value = item.value;
+          option.label = item.displayName === item.englishName ? item.displayName : `${item.displayName} / ${item.englishName}`;
+          return option;
+        }));
+      } catch {
+        list.replaceChildren();
+      }
+    }, 180);
+  });
+}
+
+const speciesInput = teamForm.elements.namedItem('species');
+if (speciesInput instanceof HTMLInputElement) attachAutocomplete(speciesInput);
+
+void refresh();
+window.setInterval(() => void refresh(true), 1500);
