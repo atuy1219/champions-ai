@@ -8,6 +8,10 @@ import {
   BattleStateStore,
   type BattleEvent,
 } from '../core/battle-state.js';
+import {
+  CurrentBattleEvaluator,
+  type CurrentEvaluationRequest,
+} from '../core/current-evaluator.js';
 import { HeuristicAnalyzer } from '../core/heuristic.js';
 import { InputError } from '../core/errors.js';
 import type { AnalyzeRequest } from '../core/types.js';
@@ -17,10 +21,11 @@ import { ShowdownAdapter } from '../showdown/adapter.js';
 const PORT = Number.parseInt(process.env.PORT ?? '3000', 10);
 const HOST = process.env.HOST ?? '127.0.0.1';
 const PUBLIC_ROOT = resolve(process.cwd(), 'dist/public');
-const MAX_BODY_BYTES = 256 * 1024;
+const MAX_BODY_BYTES = 512 * 1024;
 
 const showdown = new ShowdownAdapter();
 const analyzer = new HeuristicAnalyzer(showdown);
+const currentEvaluator = new CurrentBattleEvaluator(showdown);
 const battleState = new BattleStateStore();
 
 const contentTypes: Record<string, string> = {
@@ -76,6 +81,22 @@ function validateEvents(value: unknown): BattleEvent[] {
   return value;
 }
 
+function validateCurrentEvaluationRequest(value: CurrentEvaluationRequest): CurrentEvaluationRequest {
+  if (value.side !== undefined && value.side !== 'p1' && value.side !== 'p2') {
+    throw new InputError('sideはp1またはp2で指定してください。');
+  }
+  if (value.formatId !== undefined && typeof value.formatId !== 'string') {
+    throw new InputError('formatIdは文字列で指定してください。');
+  }
+  if (
+    value.maxActionsPerPokemon !== undefined
+    && (!Number.isFinite(value.maxActionsPerPokemon) || value.maxActionsPerPokemon < 1)
+  ) {
+    throw new InputError('maxActionsPerPokemonが不正です。');
+  }
+  return value;
+}
+
 async function serveStatic(
   pathname: string,
   response: ServerResponse,
@@ -127,10 +148,9 @@ const server = createServer(async (request, response) => {
         throw new InputError('検索種別はspeciesまたはmovesを指定してください。');
       }
 
-      const results =
-        kind === 'species'
-          ? showdown.searchSpecies(query)
-          : showdown.searchMoves(query);
+      const results = kind === 'species'
+        ? showdown.searchSpecies(query)
+        : showdown.searchMoves(query);
 
       sendJson(response, 200, { results });
       return;
@@ -161,6 +181,14 @@ const server = createServer(async (request, response) => {
         parsedEvents: events.length,
         state: battleState.applyMany(events),
       });
+      return;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/evaluate-current') {
+      const body = validateCurrentEvaluationRequest(
+        await readJsonBody<CurrentEvaluationRequest>(request),
+      );
+      sendJson(response, 200, currentEvaluator.evaluate(battleState.snapshot(), body));
       return;
     }
 
