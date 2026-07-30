@@ -21,14 +21,17 @@
             天候・フィールド・壁・行動順を含めて候補手を近似評価します。
           </p>
         </div>
-        <div id="status-text" class="status-pill">接続確認中…</div>
+        <div style="display:grid; gap:8px; justify-items:end">
+          <a class="status-pill" style="text-decoration:none" href="/live.html">ライブ追跡を開く</a>
+          <div id="status-text" class="status-pill">接続確認中…</div>
+        </div>
       </header>
 
       <form id="analyze-form" class="workspace">
         <section class="panel form-panel">
           <div class="section-heading">
             <h2>盤面入力</h2>
-            <p>現段階では1対1の簡易評価です。日本語・英語の両方で入力できます。</p>
+            <p>初期状態の設定・訂正用です。対戦中の更新はライブ追跡を使用します。</p>
           </div>
 
           <label>
