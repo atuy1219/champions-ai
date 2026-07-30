@@ -1,21 +1,33 @@
-export type Weather =
-  | 'none'
-  | 'sun'
-  | 'rain'
-  | 'sand'
-  | 'snow';
+export type Weather = 'none' | 'sun' | 'rain' | 'sand' | 'snow';
+export type Terrain = 'none' | 'electric' | 'grassy' | 'misty' | 'psychic';
+export type MajorStatus = 'none' | 'burn' | 'poison' | 'toxic' | 'paralysis' | 'sleep' | 'freeze';
+export type StatKey = 'atk' | 'def' | 'spa' | 'spd' | 'spe' | 'accuracy' | 'evasion';
+
+export interface StatStages extends Record<StatKey, number> {}
 
 export interface PokemonInput {
   species: string;
+  currentHp?: number;
+  maxHp?: number;
   hpPercent: number;
+  status: MajorStatus;
+  stages: StatStages;
   moves: string[];
+}
+
+export interface SideConditions {
+  tailwind: boolean;
+  reflect: boolean;
+  lightScreen: boolean;
+  auroraVeil: boolean;
 }
 
 export interface FieldInput {
   weather: Weather;
-  attackerSpeedStage: number;
-  defenderSpeedStage: number;
-  tailwind: 'none' | 'attacker' | 'defender' | 'both';
+  terrain: Terrain;
+  trickRoom: boolean;
+  attackerSide: SideConditions;
+  defenderSide: SideConditions;
 }
 
 export interface AnalyzeRequest {
@@ -27,6 +39,7 @@ export interface AnalyzeRequest {
 
 export interface MoveCandidate {
   move: string;
+  englishMove: string;
   category: string;
   type: string;
   score: number;
@@ -37,20 +50,25 @@ export interface MoveCandidate {
   reasons: string[];
 }
 
+export interface PokemonResponseSummary {
+  species: string;
+  englishSpecies: string;
+  types: string[];
+  hp: {
+    current?: number;
+    max?: number;
+    percent: number;
+  };
+}
+
 export interface AnalyzeResponse {
   engine: {
     name: 'pokemon-showdown';
     mod: 'champions';
     formatId: string;
   };
-  attacker: {
-    species: string;
-    types: string[];
-  };
-  defender: {
-    species: string;
-    types: string[];
-  };
+  attacker: PokemonResponseSummary;
+  defender: PokemonResponseSummary;
   candidates: MoveCandidate[];
   warnings: string[];
 }
@@ -58,6 +76,7 @@ export interface AnalyzeResponse {
 export interface SpeciesSummary {
   id: string;
   name: string;
+  displayName: string;
   types: string[];
   baseStats: {
     hp: number;
@@ -72,14 +91,21 @@ export interface SpeciesSummary {
 export interface MoveSummary {
   id: string;
   name: string;
+  displayName: string;
   type: string;
   category: 'Physical' | 'Special' | 'Status';
   basePower: number;
   accuracy: number | true;
   priority: number;
   target: string;
-  boosts?: Partial<Record<'atk' | 'def' | 'spa' | 'spd' | 'spe' | 'accuracy' | 'evasion', number>>;
+  boosts?: Partial<Record<StatKey, number>>;
   selfBoost?: {
-    boosts?: Partial<Record<'atk' | 'def' | 'spa' | 'spd' | 'spe' | 'accuracy' | 'evasion', number>>;
+    boosts?: Partial<Record<StatKey, number>>;
   };
+}
+
+export interface LocalizedSearchResult {
+  value: string;
+  displayName: string;
+  englishName: string;
 }
