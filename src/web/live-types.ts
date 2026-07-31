@@ -1,6 +1,7 @@
 export type SideId = 'p1' | 'p2';
 export type ActiveSlot = 'p1a' | 'p1b' | 'p2a' | 'p2b';
 export type BoostStat = 'atk' | 'def' | 'spa' | 'spd' | 'spe' | 'accuracy' | 'evasion';
+export type SessionResult = 'win' | 'loss' | 'draw' | 'cancelled' | 'unknown';
 
 export interface HpState {
   current: number | null;
@@ -61,14 +62,58 @@ export interface BattleState {
   history: Record<string, unknown>[];
 }
 
+export interface BattleSessionMetadata {
+  id: string;
+  title: string;
+  formatId: string;
+  status: 'active' | 'finished';
+  result: SessionResult | null;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+  finishedAt: string | null;
+}
+
+export interface DecisionRecord {
+  id: string;
+  createdAt: string;
+  evaluationRevision: number;
+  turn: number;
+  side: SideId;
+  kind: 'individual' | 'joint';
+  actionId: string;
+  label: string;
+  score: number;
+  actorSlots: ActiveSlot[];
+  notes: string;
+}
+
+export interface BattleSessionSnapshot {
+  metadata: BattleSessionMetadata;
+  state: BattleState;
+  decisions: DecisionRecord[];
+  eventCount: number;
+}
+
+export interface PersistedBattleSession {
+  schemaVersion: 1;
+  metadata: BattleSessionMetadata;
+  events: Record<string, unknown>[];
+  decisions: DecisionRecord[];
+}
+
 export interface DamagePreview {
+  targetSlot: ActiveSlot | null;
   targetSpecies: string;
+  minDamage: number;
+  maxDamage: number;
   minPercent: number;
   maxPercent: number;
   expectedPercent: number;
   koChance: number;
   hitChance: number;
   typeMultiplier: number;
+  assumptions: string[];
 }
 
 export interface ActionScoreBreakdown {
@@ -85,10 +130,27 @@ export interface ActionScoreBreakdown {
 }
 
 export interface CurrentActionEvaluation {
-  label: string;
+  id: string;
+  actorSlot: ActiveSlot;
+  actorSpecies: string;
   kind: 'move' | 'switch';
+  label: string;
+  move?: string;
+  englishMove?: string;
+  targetSlots: ActiveSlot[];
+  switchToTeamIndex?: number;
   damage: DamagePreview[];
   score: ActionScoreBreakdown;
+  reasons: string[];
+}
+
+export interface JointActionEvaluation {
+  id: string;
+  actions: string[];
+  actorSlots: ActiveSlot[];
+  score: number;
+  baseScore: number;
+  synergyScore: number;
   reasons: string[];
 }
 
@@ -101,13 +163,7 @@ export interface CurrentEvaluationResponse {
     species: string;
     actions: CurrentActionEvaluation[];
   }>;
-  jointActions: Array<{
-    actions: string[];
-    score: number;
-    baseScore: number;
-    synergyScore: number;
-    reasons: string[];
-  }>;
+  jointActions: JointActionEvaluation[];
   warnings: string[];
 }
 
