@@ -1,3 +1,5 @@
+@import url('/live-session.css');
+
 .live-header-actions {
   display: grid;
   gap: 8px;
