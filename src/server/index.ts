@@ -5,8 +5,10 @@ import { extname, join, normalize, resolve } from 'node:path';
 
 import {
   assertBattleEvent,
-  BattleStateStore,
+  isActiveSlot,
+  type ActiveSlot,
   type BattleEvent,
+  type SideId,
 } from '../core/battle-state.js';
 import {
   CurrentBattleEvaluator,
@@ -16,17 +18,25 @@ import { HeuristicAnalyzer } from '../core/heuristic.js';
 import { InputError } from '../core/errors.js';
 import type { AnalyzeRequest } from '../core/types.js';
 import { parseShowdownProtocol } from '../input/showdown-protocol.js';
+import {
+  BattleSessionService,
+  type FinishSessionInput,
+  type RecordDecisionInput,
+  type SessionResult,
+  type StartSessionInput,
+} from './battle-session.js';
 import { ShowdownAdapter } from '../showdown/adapter.js';
 
 const PORT = Number.parseInt(process.env.PORT ?? '3000', 10);
 const HOST = process.env.HOST ?? '127.0.0.1';
 const PUBLIC_ROOT = resolve(process.cwd(), 'dist/public');
-const MAX_BODY_BYTES = 512 * 1024;
+const SESSION_FILE = resolve(process.env.SESSION_FILE ?? join('.data', 'battle-session.json'));
+const MAX_BODY_BYTES = 2 * 1024 * 1024;
 
 const showdown = new ShowdownAdapter();
 const analyzer = new HeuristicAnalyzer(showdown);
 const currentEvaluator = new CurrentBattleEvaluator(showdown);
-const battleState = new BattleStateStore();
+const battleSession = new BattleSessionService(SESSION_FILE);
 
 const contentTypes: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
@@ -97,6 +107,56 @@ function validateCurrentEvaluationRequest(value: CurrentEvaluationRequest): Curr
   return value;
 }
 
+function validateStartSessionInput(value: unknown): StartSessionInput {
+  if (!value || typeof value !== 'object') return {};
+  const body = value as Record<string, unknown>;
+  if (body.title !== undefined && typeof body.title !== 'string') throw new InputError('titleは文字列で指定してください。');
+  if (body.formatId !== undefined && typeof body.formatId !== 'string') throw new InputError('formatIdは文字列で指定してください。');
+  return {
+    ...(typeof body.title === 'string' ? { title: body.title } : {}),
+    ...(typeof body.formatId === 'string' ? { formatId: body.formatId } : {}),
+  };
+}
+
+function validateDecisionInput(value: unknown): RecordDecisionInput {
+  if (!value || typeof value !== 'object') throw new InputError('decisionを指定してください。');
+  const body = value as Record<string, unknown>;
+  if (body.side !== 'p1' && body.side !== 'p2') throw new InputError('decision.sideが不正です。');
+  if (body.kind !== 'individual' && body.kind !== 'joint') throw new InputError('decision.kindが不正です。');
+  if (typeof body.actionId !== 'string' || typeof body.label !== 'string') throw new InputError('行動IDまたは表示名が不正です。');
+  if (typeof body.evaluationRevision !== 'number' || !Number.isFinite(body.evaluationRevision)) {
+    throw new InputError('evaluationRevisionが不正です。');
+  }
+  if (typeof body.score !== 'number' || !Number.isFinite(body.score)) throw new InputError('scoreが不正です。');
+  if (!Array.isArray(body.actorSlots) || body.actorSlots.some((slot) => !isActiveSlot(slot))) {
+    throw new InputError('actorSlotsが不正です。');
+  }
+  return {
+    evaluationRevision: Math.max(0, Math.trunc(body.evaluationRevision)),
+    side: body.side as SideId,
+    kind: body.kind,
+    actionId: body.actionId,
+    label: body.label,
+    score: body.score,
+    actorSlots: body.actorSlots as ActiveSlot[],
+    ...(typeof body.notes === 'string' ? { notes: body.notes } : {}),
+  };
+}
+
+function validateFinishInput(value: unknown): FinishSessionInput {
+  if (!value || typeof value !== 'object') return { result: 'unknown' };
+  const body = value as Record<string, unknown>;
+  const allowed: SessionResult[] = ['win', 'loss', 'draw', 'cancelled', 'unknown'];
+  if (body.result !== undefined && !allowed.includes(body.result as SessionResult)) {
+    throw new InputError('resultが不正です。');
+  }
+  if (body.notes !== undefined && typeof body.notes !== 'string') throw new InputError('notesは文字列で指定してください。');
+  return {
+    result: (body.result as SessionResult | undefined) ?? 'unknown',
+    ...(typeof body.notes === 'string' ? { notes: body.notes } : {}),
+  };
+}
+
 async function serveStatic(
   pathname: string,
   response: ServerResponse,
@@ -105,9 +165,7 @@ async function serveStatic(
   const safePath = normalize(requestedPath).replace(/^(\.\.(\/|\\|$))+/, '');
   const filePath = resolve(join(PUBLIC_ROOT, safePath));
 
-  if (!filePath.startsWith(PUBLIC_ROOT)) {
-    return false;
-  }
+  if (!filePath.startsWith(PUBLIC_ROOT)) return false;
 
   try {
     const info = await stat(filePath);
@@ -136,6 +194,7 @@ const server = createServer(async (request, response) => {
         status: 'ok',
         engine: 'pokemon-showdown',
         mod: 'champions',
+        persistence: SESSION_FILE,
       });
       return;
     }
@@ -143,15 +202,12 @@ const server = createServer(async (request, response) => {
     if (method === 'GET' && url.pathname === '/api/search') {
       const kind = url.searchParams.get('kind');
       const query = url.searchParams.get('q') ?? '';
-
       if (kind !== 'species' && kind !== 'moves') {
         throw new InputError('検索種別はspeciesまたはmovesを指定してください。');
       }
-
       const results = kind === 'species'
         ? showdown.searchSpecies(query)
         : showdown.searchMoves(query);
-
       sendJson(response, 200, { results });
       return;
     }
@@ -163,13 +219,14 @@ const server = createServer(async (request, response) => {
     }
 
     if (method === 'GET' && url.pathname === '/api/state') {
-      sendJson(response, 200, battleState.snapshot());
+      sendJson(response, 200, battleSession.stateSnapshot());
       return;
     }
 
     if (method === 'POST' && url.pathname === '/api/state/events') {
       const body = await readJsonBody<{ events?: unknown }>(request);
-      sendJson(response, 200, battleState.applyMany(validateEvents(body.events)));
+      const snapshot = await battleSession.applyMany(validateEvents(body.events));
+      sendJson(response, 200, snapshot.state);
       return;
     }
 
@@ -177,9 +234,10 @@ const server = createServer(async (request, response) => {
       const body = await readJsonBody<{ text?: unknown }>(request);
       if (typeof body.text !== 'string') throw new InputError('textを文字列で指定してください。');
       const events = parseShowdownProtocol(body.text);
+      const snapshot = await battleSession.applyMany(events);
       sendJson(response, 200, {
         parsedEvents: events.length,
-        state: battleState.applyMany(events),
+        state: snapshot.state,
       });
       return;
     }
@@ -188,18 +246,66 @@ const server = createServer(async (request, response) => {
       const body = validateCurrentEvaluationRequest(
         await readJsonBody<CurrentEvaluationRequest>(request),
       );
-      sendJson(response, 200, currentEvaluator.evaluate(battleState.snapshot(), body));
+      const session = battleSession.snapshot();
+      const evaluationRequest = {
+        ...body,
+        formatId: body.formatId?.trim() || session.metadata.formatId,
+      };
+      sendJson(response, 200, currentEvaluator.evaluate(session.state, evaluationRequest));
       return;
     }
 
     if (method === 'POST' && url.pathname === '/api/state/reset') {
-      sendJson(response, 200, battleState.reset());
+      const previous = battleSession.snapshot().metadata;
+      const snapshot = await battleSession.startNew({ title: previous.title, formatId: previous.formatId });
+      sendJson(response, 200, snapshot.state);
       return;
     }
 
-    if (method === 'GET' && await serveStatic(url.pathname, response)) {
+    if (method === 'GET' && url.pathname === '/api/session') {
+      sendJson(response, 200, battleSession.snapshot());
       return;
     }
+
+    if (method === 'GET' && url.pathname === '/api/session/export') {
+      sendJson(response, 200, battleSession.exportData());
+      return;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/session/new') {
+      const body = validateStartSessionInput(await readJsonBody<unknown>(request));
+      sendJson(response, 200, await battleSession.startNew(body));
+      return;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/session/import') {
+      sendJson(response, 200, await battleSession.importData(await readJsonBody<unknown>(request)));
+      return;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/session/undo') {
+      const body = await readJsonBody<{ count?: unknown }>(request);
+      const count = body.count === undefined ? 1 : Number(body.count);
+      if (!Number.isFinite(count) || count < 1) throw new InputError('countが不正です。');
+      sendJson(response, 200, await battleSession.undo(count));
+      return;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/session/decision') {
+      sendJson(response, 200, await battleSession.recordDecision(
+        validateDecisionInput(await readJsonBody<unknown>(request)),
+      ));
+      return;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/session/finish') {
+      sendJson(response, 200, await battleSession.finish(
+        validateFinishInput(await readJsonBody<unknown>(request)),
+      ));
+      return;
+    }
+
+    if (method === 'GET' && await serveStatic(url.pathname, response)) return;
 
     sendJson(response, 404, { error: 'Not found' });
   } catch (error) {
@@ -213,6 +319,15 @@ const server = createServer(async (request, response) => {
   }
 });
 
-server.listen(PORT, HOST, () => {
-  console.log(`champions-ai: http://${HOST}:${PORT}`);
+async function start(): Promise<void> {
+  await battleSession.initialize();
+  server.listen(PORT, HOST, () => {
+    console.log(`champions-ai: http://${HOST}:${PORT}`);
+    console.log(`session file: ${SESSION_FILE}`);
+  });
+}
+
+void start().catch((error) => {
+  console.error('Failed to start champions-ai', error);
+  process.exitCode = 1;
 });
