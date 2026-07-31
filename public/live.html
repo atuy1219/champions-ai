@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Pokémon Championsの対戦状況をShowdown形式のイベントとして追跡・評価するWeb UI">
+    <meta name="description" content="Pokémon Championsの対戦状況を追跡・保存・評価するWeb UI">
     <title>Champions AI Live Tracker</title>
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="/live.css">
@@ -13,11 +13,11 @@
     <main class="page-shell">
       <header class="hero live-hero">
         <div>
-          <p class="eyebrow">LIVE BATTLE STATE</p>
-          <h1>Live Tracker</h1>
+          <p class="eyebrow">LIVE BATTLE ASSISTANT</p>
+          <h1>Champions AI</h1>
           <p>
-            ポケチャンで確認した変化をBattleEventとして記録し、現在盤面から技・対象・交代を生成します。
-            Showdownログと将来の画面認識も同じ状態・評価パイプラインを使用します。
+            ポケチャンで確認した変化を記録し、現在盤面から技・対象・交代を評価します。
+            対戦状態、採用した判断、勝敗は自動保存され、再起動後も復元されます。
           </p>
         </div>
         <div class="live-header-actions">
@@ -28,6 +28,42 @@
 
       <section class="live-layout">
         <div class="live-controls">
+          <section class="panel live-panel session-panel">
+            <div class="section-heading">
+              <h2>対戦セッション</h2>
+              <p>入力は即時保存されます。JSONで別端末への移動や対戦後分析もできます。</p>
+            </div>
+            <div class="session-control-grid">
+              <label class="session-title-control">対戦名
+                <input id="session-title" value="Pokémon Champions Battle" autocomplete="off">
+              </label>
+              <button id="new-session" type="button">新しい対戦</button>
+              <button id="undo-event" class="secondary-button" type="button">最後の入力を戻す</button>
+              <button id="export-session" class="secondary-button" type="button">JSON保存</button>
+              <button id="import-session" class="secondary-button" type="button">JSON読込</button>
+              <input id="import-session-file" type="file" accept="application/json,.json" hidden>
+            </div>
+            <div id="session-view" class="session-view">セッションを読み込んでいます。</div>
+            <details class="finish-session-panel">
+              <summary>対戦を終了して結果を保存</summary>
+              <div class="finish-session-grid">
+                <label>結果
+                  <select id="session-result">
+                    <option value="win">勝ち</option>
+                    <option value="loss">負け</option>
+                    <option value="draw">引き分け</option>
+                    <option value="cancelled">中断</option>
+                    <option value="unknown" selected>結果未設定</option>
+                  </select>
+                </label>
+                <label class="finish-notes">メモ
+                  <textarea id="session-notes" rows="3" placeholder="反省点、相手構築、認識ミスなど"></textarea>
+                </label>
+                <button id="finish-session" class="wide-control" type="button">結果を確定して保存</button>
+              </div>
+            </details>
+          </section>
+
           <section class="panel live-panel">
             <div class="section-heading">
               <h2>ターン</h2>
@@ -139,7 +175,7 @@
           </section>
 
           <section class="panel live-panel">
-            <div class="section-heading"><h2>Showdownログ取込</h2><p>`request` JSON、チームプレビュー、持ち物・特性・テラスタルも取り込めます。</p></div>
+            <div class="section-heading"><h2>Showdownログ取込</h2><p><code>|request|</code> JSON、チームプレビュー、持ち物・特性・テラスタルも取り込めます。</p></div>
             <form id="protocol-form">
               <textarea id="protocol-text" rows="8" spellcheck="false">|turn|1
 |switch|p1a: Garchomp|Garchomp, L50, M|183/183
@@ -150,7 +186,7 @@
           </section>
 
           <section class="panel live-panel vision-panel">
-            <div class="section-heading"><h2>画面認識</h2><p>認識器は信頼度付きBattleEvent配列を同じAPIへ送信します。</p></div>
+            <div class="section-heading"><h2>画面認識アダプター</h2><p>外部認識器は信頼度付きBattleEvent配列を同じAPIへ送信できます。低信頼度の結果は手動で確認してから入力してください。</p></div>
             <code>{ "events": [{ "type": "weather", "condition": "rain", "source": "vision", "confidence": 0.96 }] }</code>
           </section>
         </div>
@@ -158,7 +194,7 @@
         <aside class="panel live-panel state-panel">
           <div class="state-heading">
             <div><h2>現在のBattleState</h2><p id="state-meta">読み込み中…</p></div>
-            <button id="reset-state" class="danger-button" type="button">リセット</button>
+            <button id="reset-state" class="danger-button" type="button">盤面を初期化</button>
           </div>
           <div id="state-view" class="empty-state">状態を読み込んでいます。</div>
 
