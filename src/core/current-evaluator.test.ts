@@ -75,3 +75,17 @@ test('damage previews contain a bounded range and opponent-response risk', () =>
   assert.ok(preview.hitChance >= 0 && preview.hitChance <= 100);
   assert.ok(damaging.score.opponentResponseRisk >= 0);
 });
+
+test('unknown active opponent moves add explicit uncertainty risk', () => {
+  const store = configuredStore();
+  store.applyMany([
+    { type: 'teamMember', side: 'p2', teamIndex: 1, species: 'Incineroar', moves: [] },
+    { type: 'teamMember', side: 'p2', teamIndex: 2, species: 'Rillaboom', moves: [] },
+  ]);
+  const response = new CurrentBattleEvaluator(new ShowdownAdapter()).evaluate(store.snapshot());
+  const action = response.pokemon[0]?.actions[0];
+  if (!action) throw new Error('Action is missing');
+  assert.ok(action.score.opponentResponseRisk >= 44);
+  assert.ok(response.warnings.some((warning) => warning.includes('未知攻撃リスク')));
+  assert.equal(response.engine.model, 'gen9-explainable-risk-v1');
+});
