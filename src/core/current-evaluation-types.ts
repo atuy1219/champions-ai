@@ -69,7 +69,7 @@ export interface CurrentEvaluationResponse {
     name: 'pokemon-showdown-data';
     mod: 'champions';
     formatId: string;
-    model: 'gen9-damage-and-one-turn-risk-v0';
+    model: 'gen9-explainable-risk-v1';
   };
   revision: number;
   turn: number;
