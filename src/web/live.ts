@@ -1,10 +1,15 @@
-import { renderEvaluation, renderState } from './live-render.js';
+import { renderEvaluation, renderSession, renderState } from './live-render.js';
 import type {
   ActiveSlot,
+  BattleSessionSnapshot,
   BattleState,
   BattleStats,
+  CurrentActionEvaluation,
   CurrentEvaluationResponse,
+  JointActionEvaluation,
+  PersistedBattleSession,
   SearchResult,
+  SessionResult,
   SideId,
 } from './live-types.js';
 
@@ -17,6 +22,11 @@ function required<T extends Element>(selector: string): T {
 const statusText = required<HTMLElement>('#live-status');
 const stateView = required<HTMLElement>('#state-view');
 const stateMeta = required<HTMLElement>('#state-meta');
+const sessionView = required<HTMLElement>('#session-view');
+const sessionTitle = required<HTMLInputElement>('#session-title');
+const sessionResult = required<HTMLSelectElement>('#session-result');
+const sessionNotes = required<HTMLTextAreaElement>('#session-notes');
+const importSessionFile = required<HTMLInputElement>('#import-session-file');
 const teamForm = required<HTMLFormElement>('#team-form');
 const pokemonForm = required<HTMLFormElement>('#pokemon-event-form');
 const conditionForm = required<HTMLFormElement>('#condition-form');
@@ -27,6 +37,9 @@ const evaluationView = required<HTMLElement>('#evaluation-view');
 const evaluationSide = required<HTMLSelectElement>('#evaluation-side');
 const evaluationFormat = required<HTMLInputElement>('#evaluation-format');
 const evaluateButton = required<HTMLButtonElement>('#evaluate-current');
+
+let latestEvaluation: CurrentEvaluationResponse | null = null;
+let lastKnownRevision = -1;
 
 function control(form: HTMLFormElement, name: string): HTMLInputElement | HTMLSelectElement {
   const value = form.elements.namedItem(name);
@@ -60,6 +73,38 @@ async function json<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
+function invalidateEvaluation(message = '盤面が変化しました。再評価してください。'): void {
+  latestEvaluation = null;
+  evaluationView.className = 'empty-state compact-empty';
+  evaluationView.textContent = message;
+}
+
+function applySessionSnapshot(snapshot: BattleSessionSnapshot, preserveInputs = false): void {
+  renderSession(snapshot, sessionView);
+  renderState(snapshot.state, stateView, stateMeta, turnNumber);
+  lastKnownRevision = snapshot.state.revision;
+  if (!preserveInputs) {
+    sessionTitle.value = snapshot.metadata.title;
+    evaluationFormat.value = snapshot.metadata.formatId;
+    sessionNotes.value = snapshot.metadata.notes;
+    sessionResult.value = snapshot.metadata.result ?? 'unknown';
+  }
+}
+
+async function refreshSession(silent = false): Promise<void> {
+  try {
+    const snapshot = await json<BattleSessionSnapshot>('/api/session');
+    const revisionChanged = lastKnownRevision >= 0 && snapshot.state.revision !== lastKnownRevision;
+    applySessionSnapshot(snapshot, true);
+    if (revisionChanged && latestEvaluation && latestEvaluation.revision !== snapshot.state.revision) {
+      invalidateEvaluation();
+    }
+    if (!silent) statusText.textContent = snapshot.metadata.status === 'active' ? '対戦セッション接続済み' : '終了済みセッションを表示中';
+  } catch (error) {
+    if (!silent) statusText.textContent = error instanceof Error ? error.message : '接続失敗';
+  }
+}
+
 async function postEvents(events: Record<string, unknown>[]): Promise<BattleState> {
   const state = await json<BattleState>('/api/state/events', {
     method: 'POST',
@@ -67,18 +112,11 @@ async function postEvents(events: Record<string, unknown>[]): Promise<BattleStat
     body: JSON.stringify({ events }),
   });
   renderState(state, stateView, stateMeta, turnNumber);
-  statusText.textContent = 'イベント反映済み';
+  lastKnownRevision = state.revision;
+  invalidateEvaluation();
+  await refreshSession(true);
+  statusText.textContent = 'イベントを保存しました';
   return state;
-}
-
-async function refresh(silent = false): Promise<void> {
-  try {
-    const state = await json<BattleState>('/api/state');
-    renderState(state, stateView, stateMeta, turnNumber);
-    if (!silent) statusText.textContent = 'BattleState 接続済み';
-  } catch (error) {
-    if (!silent) statusText.textContent = error instanceof Error ? error.message : '接続失敗';
-  }
 }
 
 function moves(text: string): string[] {
@@ -194,7 +232,10 @@ protocolForm.addEventListener('submit', async (event) => {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: protocolText.value }),
     });
     renderState(result.state, stateView, stateMeta, turnNumber);
-    statusText.textContent = `${result.parsedEvents}件のShowdownイベントを反映`;
+    lastKnownRevision = result.state.revision;
+    invalidateEvaluation();
+    await refreshSession(true);
+    statusText.textContent = `${result.parsedEvents}件のShowdownイベントを保存しました`;
   } catch (error) {
     statusText.textContent = error instanceof Error ? error.message : '取込失敗';
   }
@@ -209,12 +250,90 @@ required<HTMLButtonElement>('#next-turn').addEventListener('click', async () => 
   await postEvents([{ type: 'turn', turn: state.turn + 1, source: 'manual' }]);
 });
 
+required<HTMLButtonElement>('#new-session').addEventListener('click', async () => {
+  if (!window.confirm('現在の対戦を閉じて新しい対戦を開始しますか？先にJSON保存することを推奨します。')) return;
+  try {
+    const snapshot = await json<BattleSessionSnapshot>('/api/session/new', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: sessionTitle.value.trim(), formatId: evaluationFormat.value.trim() }),
+    });
+    applySessionSnapshot(snapshot);
+    invalidateEvaluation('新しい対戦を開始しました。');
+    statusText.textContent = '新しい対戦を開始しました';
+  } catch (error) {
+    statusText.textContent = error instanceof Error ? error.message : '新規対戦の開始に失敗しました';
+  }
+});
+
+required<HTMLButtonElement>('#undo-event').addEventListener('click', async () => {
+  try {
+    const snapshot = await json<BattleSessionSnapshot>('/api/session/undo', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ count: 1 }),
+    });
+    applySessionSnapshot(snapshot, true);
+    invalidateEvaluation('最後の入力を取り消しました。再評価してください。');
+    statusText.textContent = '最後のイベントを取り消しました';
+  } catch (error) {
+    statusText.textContent = error instanceof Error ? error.message : '取消に失敗しました';
+  }
+});
+
+required<HTMLButtonElement>('#export-session').addEventListener('click', async () => {
+  try {
+    const data = await json<PersistedBattleSession>('/api/session/export');
+    const blob = new Blob([`${JSON.stringify(data, null, 2)}\n`], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${data.metadata.id}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    statusText.textContent = '対戦JSONを保存しました';
+  } catch (error) {
+    statusText.textContent = error instanceof Error ? error.message : '保存に失敗しました';
+  }
+});
+
+required<HTMLButtonElement>('#import-session').addEventListener('click', () => importSessionFile.click());
+importSessionFile.addEventListener('change', async () => {
+  const file = importSessionFile.files?.[0];
+  if (!file) return;
+  try {
+    const imported = JSON.parse(await file.text()) as unknown;
+    const snapshot = await json<BattleSessionSnapshot>('/api/session/import', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(imported),
+    });
+    applySessionSnapshot(snapshot);
+    invalidateEvaluation('対戦データを読み込みました。');
+    statusText.textContent = '対戦JSONを読み込みました';
+  } catch (error) {
+    statusText.textContent = error instanceof Error ? error.message : '読込に失敗しました';
+  } finally {
+    importSessionFile.value = '';
+  }
+});
+
+required<HTMLButtonElement>('#finish-session').addEventListener('click', async () => {
+  try {
+    const snapshot = await json<BattleSessionSnapshot>('/api/session/finish', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ result: sessionResult.value as SessionResult, notes: sessionNotes.value }),
+    });
+    applySessionSnapshot(snapshot, true);
+    statusText.textContent = '対戦結果を確定して保存しました';
+  } catch (error) {
+    statusText.textContent = error instanceof Error ? error.message : '対戦終了処理に失敗しました';
+  }
+});
+
 required<HTMLButtonElement>('#reset-state').addEventListener('click', async () => {
+  if (!window.confirm('現在の盤面と履歴を初期化しますか？')) return;
   const state = await json<BattleState>('/api/state/reset', { method: 'POST' });
   renderState(state, stateView, stateMeta, turnNumber);
-  evaluationView.className = 'empty-state compact-empty';
-  evaluationView.textContent = 'まだ評価していません。';
-  statusText.textContent = 'BattleStateをリセットしました';
+  lastKnownRevision = state.revision;
+  invalidateEvaluation('盤面を初期化しました。');
+  await refreshSession(true);
+  statusText.textContent = '盤面を初期化しました';
 });
 
 evaluateButton.addEventListener('click', async () => {
@@ -226,14 +345,75 @@ evaluateButton.addEventListener('click', async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ side: evaluationSide.value, formatId: evaluationFormat.value.trim() }),
     });
+    latestEvaluation = result;
     renderEvaluation(result, evaluationView);
     statusText.textContent = '現在盤面の評価完了';
   } catch (error) {
+    latestEvaluation = null;
     evaluationView.className = 'empty-state compact-empty';
     evaluationView.textContent = error instanceof Error ? error.message : '評価失敗';
     statusText.textContent = '評価に失敗しました';
   } finally {
     evaluateButton.disabled = false;
+  }
+});
+
+function findIndividual(id: string): CurrentActionEvaluation | null {
+  if (!latestEvaluation) return null;
+  for (const entry of latestEvaluation.pokemon) {
+    const action = entry.actions.find((candidate) => candidate.id === id);
+    if (action) return action;
+  }
+  return null;
+}
+
+function findJoint(id: string): JointActionEvaluation | null {
+  return latestEvaluation?.jointActions.find((candidate) => candidate.id === id) ?? null;
+}
+
+evaluationView.addEventListener('click', async (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLButtonElement) || !target.classList.contains('adopt-action')) return;
+  if (!latestEvaluation) {
+    statusText.textContent = '先に現在盤面を再評価してください';
+    return;
+  }
+  const actionId = target.dataset.actionId ?? '';
+  const kind = target.dataset.kind;
+  const individual = kind === 'individual' ? findIndividual(actionId) : null;
+  const joint = kind === 'joint' ? findJoint(actionId) : null;
+  if (!individual && !joint) {
+    statusText.textContent = '行動候補が見つかりません';
+    return;
+  }
+  target.disabled = true;
+  try {
+    const snapshot = await json<BattleSessionSnapshot>('/api/session/decision', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(individual ? {
+        evaluationRevision: latestEvaluation.revision,
+        side: latestEvaluation.side,
+        kind: 'individual',
+        actionId: individual.id,
+        label: individual.label,
+        score: individual.score.final,
+        actorSlots: [individual.actorSlot],
+      } : {
+        evaluationRevision: latestEvaluation.revision,
+        side: latestEvaluation.side,
+        kind: 'joint',
+        actionId: joint!.id,
+        label: joint!.actions.join(' ＋ '),
+        score: joint!.score,
+        actorSlots: joint!.actorSlots,
+      }),
+    });
+    renderSession(snapshot, sessionView);
+    statusText.textContent = '採用行動を対戦ログへ記録しました';
+  } catch (error) {
+    statusText.textContent = error instanceof Error ? error.message : '行動記録に失敗しました';
+  } finally {
+    target.disabled = false;
   }
 });
 
@@ -266,5 +446,8 @@ function attachAutocomplete(input: HTMLInputElement): void {
 const speciesInput = teamForm.elements.namedItem('species');
 if (speciesInput instanceof HTMLInputElement) attachAutocomplete(speciesInput);
 
-void refresh();
-window.setInterval(() => void refresh(true), 1500);
+void refreshSession().then(async () => {
+  const snapshot = await json<BattleSessionSnapshot>('/api/session');
+  applySessionSnapshot(snapshot);
+});
+window.setInterval(() => void refreshSession(true), 2000);
