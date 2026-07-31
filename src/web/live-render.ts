@@ -1,9 +1,11 @@
 import type {
   ActiveSlot,
+  BattleSessionSnapshot,
   BattleState,
   BattleStats,
   CurrentActionEvaluation,
   CurrentEvaluationResponse,
+  DecisionRecord,
   HpState,
   PokemonBattleState,
   TeamPokemonState,
@@ -100,6 +102,35 @@ export function renderState(state: BattleState, view: HTMLElement, meta: HTMLEle
     </div></section>`;
 }
 
+function decisionRow(decision: DecisionRecord): string {
+  const time = new Date(decision.createdAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+  return `<article class="decision-row">
+    <div><strong>T${decision.turn} ${escapeHtml(decision.label)}</strong><small>${escapeHtml(decision.actorSlots.join(' + '))} / ${time}</small></div>
+    <b>${decision.score.toFixed(1)}</b>
+  </article>`;
+}
+
+export function renderSession(snapshot: BattleSessionSnapshot, view: HTMLElement): void {
+  const metadata = snapshot.metadata;
+  const resultLabel = metadata.result === 'win' ? '勝ち'
+    : metadata.result === 'loss' ? '負け'
+      : metadata.result === 'draw' ? '引き分け'
+        : metadata.result === 'cancelled' ? '中断'
+          : metadata.result === 'unknown' ? '結果未設定'
+            : '進行中';
+  const recent = snapshot.decisions.slice(-8).reverse();
+  view.innerHTML = `<div class="session-overview">
+      <div><span>対戦名</span><strong>${escapeHtml(metadata.title)}</strong></div>
+      <div><span>状態</span><strong>${metadata.status === 'active' ? '進行中' : resultLabel}</strong></div>
+      <div><span>フォーマット</span><strong>${escapeHtml(metadata.formatId)}</strong></div>
+      <div><span>保存イベント</span><strong>${snapshot.eventCount}</strong></div>
+    </div>
+    <div class="decision-list">
+      <h3>採用した判断</h3>
+      ${recent.length ? recent.map(decisionRow).join('') : '<p class="muted-text">まだ記録されていません。</p>'}
+    </div>`;
+}
+
 function scoreChips(action: CurrentActionEvaluation): string {
   const score = action.score;
   const entries: Array<[string, number, boolean]> = [
@@ -113,14 +144,16 @@ function scoreChips(action: CurrentActionEvaluation): string {
 }
 
 function actionCard(action: CurrentActionEvaluation, rank: number): string {
-  const damage = action.damage.map((preview) =>
-    `<div class="damage-line">${escapeHtml(preview.targetSpecies)} ${preview.minPercent}～${preview.maxPercent}% / 平均${preview.expectedPercent}% / KO${preview.koChance}% / 命中${preview.hitChance}%</div>`,
-  ).join('');
+  const damage = action.damage.map((preview) => {
+    const assumptions = preview.assumptions.length ? ` / ${preview.assumptions.map(escapeHtml).join('、')}` : '';
+    return `<div class="damage-line">${escapeHtml(preview.targetSpecies)} ${preview.minPercent}～${preview.maxPercent}% / 平均${preview.expectedPercent}% / KO${preview.koChance}% / 命中${preview.hitChance}%${assumptions}</div>`;
+  }).join('');
   return `<article class="evaluation-card">
     <div class="candidate-rank">${rank}</div>
     <div><div class="evaluation-card-heading"><strong>${escapeHtml(action.label)}</strong><b>${action.score.final.toFixed(1)}</b></div>
       ${damage}<div class="score-chips">${scoreChips(action)}</div>
       <ul>${action.reasons.slice(0, 7).map((reason) => `<li>${escapeHtml(reason)}</li>`).join('')}</ul>
+      <button class="adopt-action secondary-button" type="button" data-kind="individual" data-action-id="${escapeHtml(action.id)}">この行動を採用として記録</button>
     </div>
   </article>`;
 }
@@ -128,7 +161,7 @@ function actionCard(action: CurrentActionEvaluation, rank: number): string {
 export function renderEvaluation(response: CurrentEvaluationResponse, view: HTMLElement): void {
   view.className = 'evaluation-results';
   const joint = response.jointActions.length ? `<section class="joint-results"><h3>同時行動</h3>${response.jointActions.slice(0, 6).map((item, index) =>
-    `<article class="joint-card"><span>${index + 1}</span><div><strong>${item.actions.map(escapeHtml).join(' ＋ ')}</strong><small>${item.reasons.map(escapeHtml).join(' / ') || '個別評価の合計'}</small></div><b>${item.score.toFixed(1)}</b></article>`,
+    `<article class="joint-card"><span>${index + 1}</span><div><strong>${item.actions.map(escapeHtml).join(' ＋ ')}</strong><small>${item.reasons.map(escapeHtml).join(' / ') || '個別評価の合計'}</small><button class="adopt-action secondary-button" type="button" data-kind="joint" data-action-id="${escapeHtml(item.id)}">採用として記録</button></div><b>${item.score.toFixed(1)}</b></article>`,
   ).join('')}</section>` : '';
   const individual = response.pokemon.map((entry) => `<section class="individual-results"><h3>${entry.slot} · ${escapeHtml(entry.species)}</h3>
     ${entry.actions.length ? entry.actions.slice(0, 8).map((action, index) => actionCard(action, index + 1)).join('') : '<p>候補なし。技と控えを登録してください。</p>'}
