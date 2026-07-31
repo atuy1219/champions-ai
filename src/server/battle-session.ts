@@ -158,17 +158,17 @@ function validateDecision(value: unknown): DecisionRecord {
   if (typeof value.turn !== 'number' || !Number.isFinite(value.turn)) throw new InputError('decision.turnが不正です。');
   if (typeof value.score !== 'number' || !Number.isFinite(value.score)) throw new InputError('decision.scoreが不正です。');
   return {
-    id: value.id,
-    createdAt: value.createdAt,
+    id: value.id as string,
+    createdAt: value.createdAt as string,
     evaluationRevision: Math.max(0, Math.trunc(value.evaluationRevision)),
     turn: Math.max(0, Math.trunc(value.turn)),
     side: value.side,
     kind: value.kind,
-    actionId: value.actionId,
-    label: value.label,
+    actionId: value.actionId as string,
+    label: value.label as string,
     score: value.score,
     actorSlots: value.actorSlots as ActiveSlot[],
-    notes: value.notes,
+    notes: value.notes as string,
   };
 }
 
