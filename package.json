@@ -1,9 +1,9 @@
 {
   "name": "champions-ai",
-  "version": "0.4.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Pokémon Champions battle decision AI starter with a live BattleState and explainable action evaluation",
+  "description": "Pokémon Champions live battle tracker with persistent sessions and explainable action evaluation",
   "engines": {
     "node": ">=22.0.0"
   },
@@ -14,7 +14,7 @@
     "dev": "npm run build && node --watch dist/server/server/index.js",
     "start": "node dist/server/server/index.js",
     "typecheck": "tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.client.json --noEmit",
-    "test": "npm run build && node --test dist/server/core/*.test.js",
+    "test": "npm run build && node --test dist/server/core/*.test.js dist/server/server/*.test.js",
     "check": "npm run typecheck && npm run test"
   },
   "dependencies": {
