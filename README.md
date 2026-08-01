@@ -2,7 +2,47 @@
 
 Pokémon Champions向けの対戦判断支援アプリです。対戦中に確認した変化を記録し、現在盤面から技・対象・交代・ダブルの同時行動を評価します。ポケモン、技、タイプ相性などの基礎データにはPokémon Showdownの`champions` modを利用します。
 
-## v1.0の完成範囲
+## GitHub Pages版
+
+`main`へマージすると、GitHub Actionsが静的サイトを生成してGitHub Pagesへデプロイします。
+
+```text
+https://atuy1219.github.io/champions-ai/
+```
+
+Pages版はNode.jsサーバーを必要としません。
+
+```text
+GitHub Actionsでビルド
+  ├─ Pokémon Showdownから必要なDexデータだけをJSONへ抽出
+  ├─ 評価コアとライブUIをブラウザー用にバンドル
+  └─ dist/pagesをGitHub Pagesへ配置
+
+利用時のブラウザー
+  ├─ BattleState管理
+  ├─ ダメージ・候補手評価
+  ├─ Showdownログ解析
+  └─ localStorageへの対戦保存
+```
+
+対戦データは利用中のブラウザーに保存されます。別端末や別ブラウザーへ自動同期されないため、移動するときは画面の「JSON保存」「JSON読込」を使用します。
+
+ローカルでPages成果物を生成する場合:
+
+```bash
+npm install
+npm run build:pages
+```
+
+出力先:
+
+```text
+dist/pages/
+```
+
+デプロイWorkflowは`.github/workflows/pages.yml`です。リポジトリで初めてPagesを使う場合は、GitHubの`Settings → Pages → Source`を`GitHub Actions`に設定します。
+
+## v1.1の完成範囲
 
 `/live.html`だけで次の一連の運用が完結します。
 
@@ -17,9 +57,9 @@ Pokémon Champions向けの対戦判断支援アプリです。対戦中に確�
   → JSONで書き出し・再読込・対戦後分析
 ```
 
-すべての入力はイベント列として即時保存されます。ブラウザーやサーバーを再起動しても、直前の対戦状態・採用した判断・勝敗を復元します。
+Pages版ではイベント列・判断履歴・勝敗を`localStorage`へ保存します。Nodeサーバー版では`.data/battle-session.json`へ保存します。どちらも保存済みイベントを再生してBattleStateを復元します。
 
-## 起動
+## Nodeサーバー版の起動
 
 Node.js 22以降を使用します。
 
@@ -56,6 +96,8 @@ SESSION_FILE=/path/to/session.json npm start
 Showdownログ ─────┼→ BattleEvent[] → 永続セッション → BattleState → 評価器
 画面認識アダプター ┘
 ```
+
+Node版ではHTTP APIが処理します。Pages版では同じ`/api/*`インターフェースをブラウザー内で再現するため、ライブUIは共通です。
 
 画面認識器は、例えば次のJSONを`POST /api/state/events`へ送信できます。
 
@@ -122,7 +164,7 @@ Showdownログ ─────┼→ BattleEvent[] → 永続セッション →
 - 勝ち・負け・引き分け・中断
 - 対戦後メモ
 
-保存は一時ファイルを書いてから置き換える方式です。保存ファイルが破損していた場合は退避し、新しいセッションで起動します。
+Pages版ではブラウザー保存領域を使用します。Node版では一時ファイルを書いてから保存ファイルを置き換えます。どちらの版でもJSONによる書き出しと読込が可能です。
 
 ## Showdownログ取込
 
@@ -140,62 +182,25 @@ Showdownログ ─────┼→ BattleEvent[] → 永続セッション →
 
 ## API
 
-現在状態:
-
-```http
-GET /api/state
-```
-
-現在セッション:
-
-```http
-GET /api/session
-```
-
-イベント反映:
-
-```http
-POST /api/state/events
-Content-Type: application/json
-
-{ "events": [...] }
-```
-
-Showdownログ取込:
-
-```http
-POST /api/state/showdown
-Content-Type: application/json
-
-{ "text": "|-weather|RainDance" }
-```
-
-現在盤面の評価:
-
-```http
-POST /api/evaluate-current
-Content-Type: application/json
-
-{
-  "side": "p1",
-  "formatId": "gen9championsvgc2026regma"
-}
-```
-
-セッション操作:
+Node版は実際のHTTP APIを提供します。Pages版はライブUIから呼ばれる同じAPIをブラウザー内で処理します。
 
 ```text
+GET  /api/state
+GET  /api/session
+GET  /api/session/export
+POST /api/state/events
+POST /api/state/showdown
+POST /api/evaluate-current
 POST /api/session/new
 POST /api/session/undo
 POST /api/session/import
-GET  /api/session/export
 POST /api/session/decision
 POST /api/session/finish
 ```
 
 ## 精度上の境界
 
-v1.0は手動入力型の対戦支援アプリとして完成していますが、ゲームエンジンの完全な再実装ではありません。
+v1.1は手動入力型の対戦支援アプリとして完成していますが、ゲームエンジンの完全な再実装ではありません。
 
 - ダメージ計算は第9世代の基本式と主要補正を実装しています
 - すべての技固有スクリプト、持ち物、特性は未再現です
@@ -216,8 +221,10 @@ npm run check
 
 以下を検証します。
 
-- サーバー・ブラウザーの厳格TypeScript型検査
-- ビルド
+- サーバー・通常ブラウザー・Pages版の厳格TypeScript型検査
+- Nodeサーバービルド
+- Pages用ブラウザーバンドル
+- Pokémon Showdownからの静的Dex生成
 - BattleStateと継続ターン
 - Showdownプロトコル変換
 - ダメージ、技・交代、ダブル同時行動
@@ -235,11 +242,20 @@ src/
 │   ├── action-evaluator.ts         技・交代・同時行動の採点
 │   └── current-evaluator.ts        現在盤面評価
 ├── input/                          Showdownログ・画面認識入力契約
-├── showdown/                       Pokémon Showdownデータアダプター
+├── showdown/                       Node版Pokémon Showdownアダプター
 ├── server/
-│   ├── battle-session.ts           永続化・再生・取消・判断ログ
+│   ├── battle-session.ts           ファイル永続化・再生・取消・判断ログ
 │   └── index.ts                    HTTP APIと静的配信
-└── web/                            ライブUI
+├── pages/
+│   ├── browser-adapter.ts          静的Dexアダプター
+│   ├── browser-session.ts          ブラウザー永続化
+│   ├── api-emulator.ts             UI用APIのブラウザー内実装
+│   └── main.ts                     Pages版起動処理
+└── web/                            Node版・Pages版共通ライブUI
+
+scripts/
+├── export-champions-data.mjs       Showdownデータの静的JSON化
+└── build-pages.mjs                 Pages成果物生成
 ```
 
 ## 将来の拡張
