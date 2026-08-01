@@ -2,6 +2,8 @@ import { PagesApiEmulator } from './api-emulator.js';
 import { ShowdownAdapter } from './browser-adapter.js';
 import { BrowserBattleSession } from './browser-session.js';
 
+type ReadyWindow = Window & { __championsApiReady?: boolean };
+
 async function bootstrap(): Promise<void> {
   const nativeFetch = window.fetch.bind(window);
   const dexUrl = new URL('./data/champions-dex.json', import.meta.url);
@@ -15,7 +17,13 @@ async function bootstrap(): Promise<void> {
     return response ?? nativeFetch(input, init);
   };
 
-  await import('../web/live.js');
+  (window as ReadyWindow).__championsApiReady = true;
+  window.dispatchEvent(new Event('champions-api-ready'));
+
+  const page = document.body.dataset.page ?? 'advanced';
+  if (page === 'advanced') {
+    await import('../web/live.js');
+  }
 }
 
 void bootstrap().catch((error) => {
