@@ -161,7 +161,7 @@ export class BrowserBattleSession {
   snapshot(): BattleSessionSnapshot {
     return {
       metadata: structuredClone(this.metadata),
-      state: this.store.snapshot(),
+      state: this.store.snapshot() as unknown as BattleSessionSnapshot['state'],
       decisions: structuredClone(this.decisions),
       eventCount: this.events.length,
     };
