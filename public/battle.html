@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="Pokémon Championsの対戦中に相手情報だけを入力して候補手を評価する画面">
+  <title>対戦 - Champions AI</title>
+  <link rel="stylesheet" href="./mobile-app.css">
+</head>
+<body class="mobile-app" data-page="battle">
+  <main class="mobile-shell">
+    <header class="mobile-header">
+      <div>
+        <h1>対戦</h1>
+        <p>相手の公開情報を入力すると盤面を自動更新します</p>
+      </div>
+      <span id="live-status" class="connection-pill">起動中…</span>
+    </header>
+
+    <div class="screen-stack">
+      <section class="mobile-card">
+        <div class="card-heading">
+          <div><h2>現在の盤面</h2><p>技・特性から天候、フィールド、壁などを自動推測</p></div>
+          <button id="next-turn" class="ghost" type="button">次のターン</button>
+        </div>
+        <div id="state-strip" class="state-strip"></div>
+        <div id="battle-board" class="battle-board"></div>
+      </section>
+
+      <section class="mobile-card">
+        <div class="card-heading">
+          <div><h2>自分の場</h2><p>保存済みパーティーから場にいる2匹だけを選択</p></div>
+        </div>
+        <div class="compact-grid">
+          <label class="wide">使用パーティー
+            <select id="party-select"></select>
+          </label>
+          <label>左
+            <select id="own-left"></select>
+          </label>
+          <label>右
+            <select id="own-right"></select>
+          </label>
+          <button id="load-party" class="secondary wide" type="button">パーティーを読み込み、場を設定</button>
+        </div>
+      </section>
+
+      <section class="mobile-card">
+        <div class="card-heading">
+          <div><h2>相手の情報</h2><p>入力するのは相手のポケモン、特性、技、持ち物、残りHPだけ</p></div>
+        </div>
+        <div class="slot-tabs">
+          <button type="button" class="slot-tab active" data-slot="p2a">相手 左</button>
+          <button type="button" class="slot-tab" data-slot="p2b">相手 右</button>
+        </div>
+        <form id="opponent-form" class="compact-grid">
+          <label class="wide">ポケモン
+            <input name="species" autocomplete="off" placeholder="例：ガオガエン" required>
+          </label>
+          <label>特性
+            <input name="ability" list="ability-list" autocomplete="off" placeholder="例：いかく">
+          </label>
+          <label>持ち物
+            <input name="item" autocomplete="off" placeholder="判明時のみ">
+          </label>
+          <label class="wide">発動・使用した技
+            <input name="move" autocomplete="off" placeholder="例：おいかぜ">
+          </label>
+          <label class="wide">残りHP
+            <input name="hpPercent" type="number" min="0" max="100" step="0.1" value="100" inputmode="decimal" required>
+          </label>
+          <button id="apply-opponent" class="wide" type="submit">反映して候補手を再計算</button>
+        </form>
+        <datalist id="ability-list">
+          <option value="いかく"><option value="あめふらし"><option value="ひでり">
+          <option value="すなおこし"><option value="ゆきふらし"><option value="エレキメイカー">
+          <option value="グラスメイカー"><option value="ミストメイカー"><option value="サイコメイカー">
+          <option value="ハドロンエンジン"><option value="ひひいろのこどう">
+        </datalist>
+        <p id="inference-note" class="inference-note">場の状態は入力された技・特性から自動反映されます。誤認時は「詳細」画面で修正できます。</p>
+      </section>
+
+      <section class="mobile-card">
+        <div class="card-heading">
+          <div><h2>候補手</h2><p>現在盤面を基に、技・対象・交代を評価</p></div>
+          <button id="evaluate" class="ghost" type="button">再計算</button>
+        </div>
+        <div id="evaluation-view" class="empty-message">パーティーと相手情報を入力してください。</div>
+      </section>
+    </div>
+  </main>
+
+  <div id="toast" class="toast"></div>
+  <nav class="bottom-nav" aria-label="メインメニュー">
+    <a class="active" href="./battle.html"><span>⚔</span>対戦</a>
+    <a href="./party.html"><span>◉</span>パーティー</a>
+    <a href="./history.html"><span>▤</span>履歴</a>
+    <a href="./live.html"><span>⚙</span>詳細</a>
+  </nav>
+
+  <script type="module" src="./live.js"></script>
+  <script type="module" src="./battle.js"></script>
+</body>
+</html>
