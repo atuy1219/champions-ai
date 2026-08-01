@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "noEmit": true
+  },
+  "include": [
+    "src/pages/**/*.ts",
+    "src/core/**/*.ts",
+    "src/input/**/*.ts",
+    "src/web/live.ts",
+    "src/web/live-render.ts",
+    "src/web/live-types.ts",
+    "src/data/**/*.ts"
+  ]
+}
