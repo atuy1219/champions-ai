@@ -3,25 +3,26 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Pokémon Championsの対戦状況を追跡・保存・評価するWeb UI">
-    <title>Champions AI Live Tracker</title>
+    <meta name="description" content="Pokémon Champions専用のパーティー登録・対戦追跡・行動評価Web UI">
+    <title>Champions AI</title>
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="/live.css">
     <link rel="stylesheet" href="/live-evaluation.css">
+    <link rel="stylesheet" href="/champions-team.css">
   </head>
   <body>
     <main class="page-shell">
       <header class="hero live-hero">
         <div>
-          <p class="eyebrow">LIVE BATTLE ASSISTANT</p>
+          <p class="eyebrow">POKÉMON CHAMPIONS RULE-BASED AI</p>
           <h1>Champions AI</h1>
           <p>
-            ポケチャンで確認した変化を記録し、現在盤面から技・対象・交代を評価します。
-            対戦状態、採用した判断、勝敗は自動保存され、再起動後も復元されます。
+            Pokémon ShowdownのChampions modを基盤に、ポケチャンの盤面を記録し、
+            技・対象・交代を説明付きで評価します。パーティーと対戦履歴は端末内へ保存されます。
           </p>
+          <div class="champions-rule-badge">Lv.50・個体値31固定・能力ポイント66・テラスタルなし</div>
         </div>
         <div class="live-header-actions">
-          <a class="status-pill nav-pill" href="/">旧・単体評価</a>
           <div id="live-status" class="status-pill">接続確認中…</div>
         </div>
       </header>
@@ -66,6 +67,31 @@
 
           <section class="panel live-panel">
             <div class="section-heading">
+              <h2>マイパーティー</h2>
+              <p>現在の自分チームをブラウザーへ保存し、次の対戦で6匹まとめて呼び出せます。</p>
+            </div>
+            <div class="party-manager">
+              <div class="party-toolbar">
+                <label>パーティー名
+                  <input id="party-name" autocomplete="off" placeholder="例：雨スタンダード">
+                </label>
+                <label>保存済み
+                  <select id="saved-party">
+                    <option value="">保存済みパーティーを選択</option>
+                  </select>
+                </label>
+              </div>
+              <div class="party-actions">
+                <button id="save-party" type="button">現在の自分チームを保存</button>
+                <button id="load-party" class="secondary-button" type="button">現在の対戦へ読込</button>
+                <button id="delete-party" class="danger-button" type="button">削除</button>
+              </div>
+              <div id="party-summary" class="party-summary empty-party">登録済みパーティーはありません。</div>
+            </div>
+          </section>
+
+          <section class="panel live-panel">
+            <div class="section-heading">
               <h2>ターン</h2>
               <p>残りターン付きの場・サイド状態は、ターン更新時に自動終了します。</p>
             </div>
@@ -79,7 +105,7 @@
           <section class="panel live-panel">
             <div class="section-heading">
               <h2>チーム・型の登録</h2>
-              <p>自分は実数値と4技を登録します。相手は判明した情報だけで構いません。</p>
+              <p>ポケモン、性格、能力ポイントを入力すると、個体値31・Lv.50として実数値を自動計算します。</p>
             </div>
             <form id="team-form" class="control-grid team-form">
               <label>陣営
@@ -91,9 +117,10 @@
               <label>チーム番号
                 <input name="teamIndex" type="number" min="1" max="6" value="1" required>
               </label>
-              <label>レベル
-                <input name="level" type="number" min="1" max="100" value="50" required>
-              </label>
+              <input name="level" type="hidden" value="50">
+              <input name="teraType" type="hidden" value="">
+              <input name="teraActive" type="checkbox" hidden>
+
               <label class="wide-control">ポケモン
                 <input name="species" value="ガブリアス" data-autocomplete="species" autocomplete="off" required>
               </label>
@@ -102,24 +129,66 @@
               </label>
               <label>持ち物<input name="item" placeholder="こだわりスカーフ"></label>
               <label>特性<input name="ability" placeholder="さめはだ"></label>
-              <label>テラスタイプ<input name="teraType" placeholder="じめん"></label>
-              <label class="check-control wide-control"><input name="teraActive" type="checkbox">現在テラスタル中</label>
-              <label>現在HP<input name="currentHp" type="number" min="0" value="183"></label>
-              <label>最大HP<input name="maxHp" type="number" min="1" value="183"></label>
-              <label>HP %（相手用）<input name="hpPercent" type="number" min="0" max="100" step="0.1" value="100"></label>
-              <label class="check-control wide-control"><input name="exactHp" type="checkbox" checked>HPを実数値として記録</label>
-              <div class="wide-control stat-editor">
-                <span class="field-label">実数値（空欄なら無振り・個体値31・性格補正なしで補完）</span>
-                <div class="stat-input-grid">
-                  <label>HP<input name="statHp" type="number" min="1" placeholder="183"></label>
-                  <label>攻撃<input name="statAtk" type="number" min="1" placeholder="182"></label>
-                  <label>防御<input name="statDef" type="number" min="1" placeholder="115"></label>
-                  <label>特攻<input name="statSpa" type="number" min="1" placeholder="90"></label>
-                  <label>特防<input name="statSpd" type="number" min="1" placeholder="105"></label>
-                  <label>素早さ<input name="statSpe" type="number" min="1" placeholder="169"></label>
+
+              <div class="wide-control champions-build-editor">
+                <label>性格
+                  <select name="nature">
+                    <option value="hardy">がんばりや（補正なし）</option>
+                    <option value="lonely">さみしがり（攻撃↑ 防御↓）</option>
+                    <option value="brave">ゆうかん（攻撃↑ 素早さ↓）</option>
+                    <option value="adamant">いじっぱり（攻撃↑ 特攻↓）</option>
+                    <option value="naughty">やんちゃ（攻撃↑ 特防↓）</option>
+                    <option value="bold">ずぶとい（防御↑ 攻撃↓）</option>
+                    <option value="docile">すなお（補正なし）</option>
+                    <option value="relaxed">のんき（防御↑ 素早さ↓）</option>
+                    <option value="impish">わんぱく（防御↑ 特攻↓）</option>
+                    <option value="lax">のうてんき（防御↑ 特防↓）</option>
+                    <option value="timid">おくびょう（素早さ↑ 攻撃↓）</option>
+                    <option value="hasty">せっかち（素早さ↑ 防御↓）</option>
+                    <option value="serious">まじめ（補正なし）</option>
+                    <option value="jolly" selected>ようき（素早さ↑ 特攻↓）</option>
+                    <option value="naive">むじゃき（素早さ↑ 特防↓）</option>
+                    <option value="modest">ひかえめ（特攻↑ 攻撃↓）</option>
+                    <option value="mild">おっとり（特攻↑ 防御↓）</option>
+                    <option value="quiet">れいせい（特攻↑ 素早さ↓）</option>
+                    <option value="bashful">てれや（補正なし）</option>
+                    <option value="rash">うっかりや（特攻↑ 特防↓）</option>
+                    <option value="calm">おだやか（特防↑ 攻撃↓）</option>
+                    <option value="gentle">おとなしい（特防↑ 防御↓）</option>
+                    <option value="sassy">なまいき（特防↑ 素早さ↓）</option>
+                    <option value="careful">しんちょう（特防↑ 特攻↓）</option>
+                    <option value="quirky">きまぐれ（補正なし）</option>
+                  </select>
+                </label>
+                <div class="sp-heading">
+                  <span class="field-label">能力ポイント（SP／従来の努力値相当）</span>
+                  <output id="sp-total">66 / 66</output>
+                </div>
+                <div class="sp-grid">
+                  <label>HP<input name="spHp" type="number" min="0" max="32" step="1" value="2"></label>
+                  <label>攻撃<input name="spAtk" type="number" min="0" max="32" step="1" value="32"></label>
+                  <label>防御<input name="spDef" type="number" min="0" max="32" step="1" value="0"></label>
+                  <label>特攻<input name="spSpa" type="number" min="0" max="32" step="1" value="0"></label>
+                  <label>特防<input name="spSpd" type="number" min="0" max="32" step="1" value="0"></label>
+                  <label>素早さ<input name="spSpe" type="number" min="0" max="32" step="1" value="32"></label>
+                </div>
+                <p class="rule-note">各能力0～32、合計66まで。ポケチャンでは個体値を入力せず、すべて31として計算します。</p>
+                <span class="field-label">自動計算された実数値</span>
+                <div class="calculated-stat-grid">
+                  <label>HP<input name="statHp" type="number" min="1" value="185" readonly></label>
+                  <label>攻撃<input name="statAtk" type="number" min="1" value="182" readonly></label>
+                  <label>防御<input name="statDef" type="number" min="1" value="115" readonly></label>
+                  <label>特攻<input name="statSpa" type="number" min="1" value="81" readonly></label>
+                  <label>特防<input name="statSpd" type="number" min="1" value="105" readonly></label>
+                  <label>素早さ<input name="statSpe" type="number" min="1" value="169" readonly></label>
                 </div>
               </div>
-              <button class="wide-control" type="submit">チーム情報を保存</button>
+
+              <label>現在HP<input name="currentHp" type="number" min="0" value="185"></label>
+              <label>最大HP<input name="maxHp" class="calculated-value" type="number" min="1" value="185" readonly></label>
+              <label>HP %（相手用）<input name="hpPercent" type="number" min="0" max="100" step="0.1" value="100"></label>
+              <label class="check-control wide-control"><input name="exactHp" type="checkbox" checked>HPを実数値として記録</label>
+              <button class="wide-control" type="submit">このポケモンをチームへ登録</button>
             </form>
           </section>
 
@@ -141,8 +210,8 @@
               </label>
               <label>チーム番号<input name="teamIndex" type="number" min="1" max="6" value="1"></label>
               <label class="wide-control">値<input name="value" value="ガブリアス" placeholder="ポケモン名、技名、状態異常"></label>
-              <label>現在HP<input name="currentHp" type="number" min="0" value="183"></label>
-              <label>最大HP<input name="maxHp" type="number" min="1" value="183"></label>
+              <label>現在HP<input name="currentHp" type="number" min="0" value="185"></label>
+              <label>最大HP<input name="maxHp" type="number" min="1" value="185"></label>
               <label>HP %<input name="hpPercent" type="number" min="0" max="100" step="0.1" value="100"></label>
               <label>能力
                 <select name="stat">
@@ -175,10 +244,10 @@
           </section>
 
           <section class="panel live-panel">
-            <div class="section-heading"><h2>Showdownログ取込</h2><p><code>|request|</code> JSON、チームプレビュー、持ち物・特性・テラスタルも取り込めます。</p></div>
+            <div class="section-heading"><h2>Showdownログ取込</h2><p><code>|request|</code> JSON、チームプレビュー、持ち物・特性を取り込めます。</p></div>
             <form id="protocol-form">
               <textarea id="protocol-text" rows="8" spellcheck="false">|turn|1
-|switch|p1a: Garchomp|Garchomp, L50, M|183/183
+|switch|p1a: Garchomp|Garchomp, L50, M|185/185
 |switch|p2a: Incineroar|Incineroar, L50, M|100/100
 |-sidestart|p1: player|move: Tailwind</textarea>
               <button type="submit">ログを解析して反映</button>
@@ -202,7 +271,7 @@
             <div class="section-heading"><h2>現在盤面の評価</h2><p>技・対象・交代と、ダブルの2体同時行動を採点します。</p></div>
             <div class="evaluation-controls">
               <label>評価する陣営<select id="evaluation-side"><option value="p1">自分 p1</option><option value="p2">相手 p2</option></select></label>
-              <label>フォーマット<input id="evaluation-format" value="gen9championsvgc2026regma"></label>
+              <input id="evaluation-format" type="hidden" value="gen9championsvgc2026regma">
               <button id="evaluate-current" type="button">現在盤面を評価</button>
             </div>
             <div id="evaluation-view" class="empty-state compact-empty">まだ評価していません。</div>
@@ -211,5 +280,6 @@
       </section>
     </main>
     <script type="module" src="/live.js"></script>
+    <script type="module" src="/team-editor.js"></script>
   </body>
 </html>
