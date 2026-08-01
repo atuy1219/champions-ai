@@ -1,0 +1,121 @@
+.champions-rule-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  width: fit-content;
+  padding: .45rem .75rem;
+  border: 1px solid color-mix(in srgb, var(--accent, #5d6bff) 40%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent, #5d6bff) 10%, transparent);
+  font-size: .84rem;
+  font-weight: 700;
+}
+
+.party-manager {
+  display: grid;
+  gap: 1rem;
+}
+
+.party-toolbar {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) minmax(14rem, 1.25fr);
+  gap: .8rem;
+}
+
+.party-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .65rem;
+}
+
+.party-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: .65rem;
+}
+
+.party-summary.empty-party {
+  display: block;
+  padding: .9rem 1rem;
+  border: 1px dashed var(--border, #c9ced8);
+  border-radius: .8rem;
+  color: var(--muted, #667085);
+}
+
+.party-member {
+  display: grid;
+  gap: .28rem;
+  padding: .85rem;
+  text-align: left;
+  border: 1px solid var(--border, #c9ced8);
+  border-radius: .8rem;
+  background: var(--surface, #fff);
+  color: inherit;
+}
+
+.party-member:hover {
+  border-color: var(--accent, #5d6bff);
+  transform: translateY(-1px);
+}
+
+.party-member span,
+.party-member small {
+  overflow-wrap: anywhere;
+  color: var(--muted, #667085);
+  font-size: .78rem;
+}
+
+.champions-build-editor {
+  display: grid;
+  gap: .9rem;
+  padding: .9rem;
+  border: 1px solid var(--border, #c9ced8);
+  border-radius: .9rem;
+  background: color-mix(in srgb, var(--surface, #fff) 92%, var(--accent, #5d6bff));
+}
+
+.sp-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.sp-heading output {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.sp-heading output.over-limit {
+  color: #c62828;
+}
+
+.sp-grid,
+.calculated-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(4.7rem, 1fr));
+  gap: .55rem;
+}
+
+.calculated-stat-grid input[readonly],
+input[readonly].calculated-value {
+  background: color-mix(in srgb, var(--surface, #fff) 88%, #8da2fb);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.rule-note {
+  margin: 0;
+  color: var(--muted, #667085);
+  font-size: .83rem;
+  line-height: 1.6;
+}
+
+@media (max-width: 780px) {
+  .party-toolbar,
+  .party-actions,
+  .sp-grid,
+  .calculated-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
