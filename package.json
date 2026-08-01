@@ -1,0 +1,29 @@
+{
+  "name": "champions-ai",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pokémon Champions live battle tracker with persistent sessions and explainable action evaluation",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "sync:i18n": "node scripts/sync-ja-names.mjs",
+    "prebuild": "node scripts/sync-ja-names.mjs --best-effort",
+    "build": "tsc -p tsconfig.server.json && tsc -p tsconfig.client.json && node scripts/copy-static.mjs",
+    "build:pages": "node scripts/sync-ja-names.mjs --best-effort && node scripts/build-pages.mjs",
+    "dev": "npm run build && node --watch dist/server/server/index.js",
+    "start": "node dist/server/server/index.js",
+    "typecheck": "tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.client.json --noEmit && tsc -p tsconfig.pages.json --noEmit",
+    "test": "npm run build && node --test dist/server/core/*.test.js dist/server/server/*.test.js",
+    "check": "npm run typecheck && npm run test && npm run build:pages"
+  },
+  "dependencies": {
+    "pokemon-showdown": "0.11.11"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "esbuild": "^0.25.9",
+    "typescript": "^5.8.3"
+  }
+}
