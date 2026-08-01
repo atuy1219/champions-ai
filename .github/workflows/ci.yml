@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, agent/mobile-battle-workflow]
   pull_request:
 
 permissions:
@@ -15,7 +15,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -28,6 +28,13 @@ jobs:
 
       - name: Install dependencies
         run: npm install
+
+      - name: Check static JavaScript syntax
+        run: |
+          node --check public/battle.js
+          node --check public/party.js
+          node --check public/history.js
+          node --check public/team-editor.js
 
       - name: Run checks
         run: npm run check

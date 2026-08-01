@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="Pokémon Champions用パーティーを登録する画面">
+  <title>パーティー - Champions AI</title>
+  <link rel="stylesheet" href="./mobile-app.css">
+</head>
+<body class="mobile-app" data-page="party">
+  <main class="mobile-shell">
+    <header class="mobile-header">
+      <div><h1>パーティー</h1><p>対戦中の入力から分離した専用編集画面</p></div>
+      <span id="live-status" class="connection-pill">起動中…</span>
+    </header>
+
+    <div class="screen-stack">
+      <section class="mobile-card">
+        <div class="card-heading"><div><h2>保存済みパーティー</h2><p>編集対象を選ぶか、新規作成します</p></div></div>
+        <div class="compact-grid">
+          <label class="wide">パーティー
+            <select id="party-select"><option value="">新しいパーティー</option></select>
+          </label>
+          <label class="wide">名前
+            <input id="party-name" value="マイパーティ" autocomplete="off">
+          </label>
+          <button id="new-party" class="secondary" type="button">新規</button>
+          <button id="delete-party" class="danger" type="button">削除</button>
+        </div>
+      </section>
+
+      <section class="mobile-card">
+        <div class="card-heading"><div><h2>6匹の登録</h2><p>編集する枠を選択</p></div></div>
+        <div id="party-slots" class="party-slot-list"></div>
+      </section>
+
+      <section class="mobile-card">
+        <div class="card-heading"><div><h2 id="editor-title">1匹目</h2><p>Lv.50・個体値31固定。能力ポイントは各0～32、合計66まで</p></div></div>
+        <form id="member-form" class="compact-grid">
+          <label class="wide">ポケモン
+            <input name="species" autocomplete="off" placeholder="例：ガブリアス" required>
+          </label>
+          <label>特性<input name="ability" autocomplete="off"></label>
+          <label>持ち物<input name="item" autocomplete="off"></label>
+          <label class="wide">技（カンマ区切り）
+            <input name="moves" autocomplete="off" placeholder="じしん, まもる">
+          </label>
+          <label class="wide">性格<select name="nature"></select></label>
+          <div class="wide stat-grid" id="sp-grid"></div>
+          <p id="sp-total" class="inference-note wide">能力ポイント 0 / 66</p>
+          <div class="wide stat-grid" id="stat-grid"></div>
+          <button class="wide" type="submit">この枠を保存</button>
+        </form>
+      </section>
+
+      <button id="save-party" class="sticky-action" type="button">パーティー全体を保存して対戦で使用</button>
+    </div>
+  </main>
+
+  <div id="toast" class="toast"></div>
+  <nav class="bottom-nav" aria-label="メインメニュー">
+    <a href="./battle.html"><span>⚔</span>対戦</a>
+    <a class="active" href="./party.html"><span>◉</span>パーティー</a>
+    <a href="./history.html"><span>▤</span>履歴</a>
+    <a href="./live.html"><span>⚙</span>詳細</a>
+  </nav>
+
+  <script type="module" src="./live.js"></script>
+  <script type="module" src="./party.js"></script>
+</body>
+</html>
