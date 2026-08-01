@@ -140,8 +140,8 @@ export class PagesApiEmulator {
         const body = await readBody(input, init);
         const record = isRecord(body) ? body : {};
         return jsonResponse(this.session.startNew({
-          title: typeof record.title === 'string' ? record.title : undefined,
-          formatId: typeof record.formatId === 'string' ? record.formatId : undefined,
+          ...(typeof record.title === 'string' ? { title: record.title } : {}),
+          ...(typeof record.formatId === 'string' ? { formatId: record.formatId } : {}),
         }));
       }
 
@@ -170,7 +170,7 @@ export class PagesApiEmulator {
           label: body.label,
           score: body.score,
           actorSlots: validateSlots(body.actorSlots),
-          notes: typeof body.notes === 'string' ? body.notes : undefined,
+          ...(typeof body.notes === 'string' ? { notes: body.notes } : {}),
         }));
       }
 
@@ -181,7 +181,7 @@ export class PagesApiEmulator {
         const result = allowed.has(record.result as SessionResult) ? record.result as SessionResult : 'unknown';
         return jsonResponse(this.session.finish({
           result,
-          notes: typeof record.notes === 'string' ? record.notes : undefined,
+          ...(typeof record.notes === 'string' ? { notes: record.notes } : {}),
         }));
       }
 
