@@ -42,11 +42,11 @@ await writeFile(resolve(output, 'index.html'), `<!doctype html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="refresh" content="0; url=./live.html">
+  <meta http-equiv="refresh" content="0; url=./battle.html">
   <title>Champions AI</title>
 </head>
 <body>
-  <p><a href="./live.html">Champions AIを開く</a></p>
+  <p><a href="./battle.html">Champions AIを開く</a></p>
 </body>
 </html>
 `, 'utf8');
